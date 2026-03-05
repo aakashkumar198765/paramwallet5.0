@@ -11,17 +11,19 @@ This document describes the ParamGateway API integration for the Wallet Applicat
 ## Table of Contents
 
 1. [Ecosystem Context](#1-ecosystem-context)
-2. [Foundational Principles](#2-foundational-principles)
-3. [API Base Configuration](#3-api-base-configuration)
-4. [Pipeline Execute API — Unified Spec](#4-pipeline-execute-api--unified-spec)
-5. [Batch Task Status API](#5-batch-task-status-api)
-6. [Onchain SM Definition — Full Spec](#6-onchain-sm-definition--full-spec)
-7. [Onchain Schema Definition — Full Spec](#7-onchain-schema-definition--full-spec)
-8. [Offchain SM Definition — Full Spec](#8-offchain-sm-definition--full-spec)
-9. [Offchain Schema Definition — Full Spec](#9-offchain-schema-definition--full-spec)
-10. [MongoDB Storage — Definition Outcomes](#10-mongodb-storage--definition-outcomes)
-11. [Stub APIs — Not Yet Documented](#11-stub-apis--not-yet-documented)
-12. [Integration Flow & Implementation Notes](#12-integration-flow--implementation-notes)
+2. [Integration vs Stub Summary](#2-integration-vs-stub-summary)
+3. [Monorepo Placement & Folder Structure](#3-monorepo-placement--folder-structure)
+4. [Foundational Principles](#4-foundational-principles)
+5. [API Base Configuration](#5-api-base-configuration)
+6. [Pipeline Execute API — Unified Spec](#6-pipeline-execute-api--unified-spec)
+7. [Batch Task Status API](#7-batch-task-status-api)
+8. [Onchain SM Definition — Full Spec](#8-onchain-sm-definition--full-spec)
+9. [Onchain Schema Definition — Full Spec](#9-onchain-schema-definition--full-spec)
+10. [Offchain SM Definition — Full Spec](#10-offchain-sm-definition--full-spec)
+11. [Offchain Schema Definition — Full Spec](#11-offchain-schema-definition--full-spec)
+12. [MongoDB Storage — Definition Outcomes](#12-mongodb-storage--definition-outcomes)
+13. [Stub APIs — Not Yet Documented](#13-stub-apis--not-yet-documented)
+14. [Integration Flow & Implementation Notes](#14-integration-flow--implementation-notes)
 
 ---
 
@@ -65,7 +67,53 @@ This document describes the ParamGateway API integration for the Wallet Applicat
 
 ---
 
-## 2. Foundational Principles
+## 2. Integration vs Stub Summary
+
+| Operation | Status | Notes |
+|-----------|--------|-------|
+| Onchain SM Definition | **Full integration** | `pipe:sys:define-sm-v1` — execute + poll task status |
+| Onchain Schema Definition | **Full integration** | `pipe:sys:define-schema-v1` |
+| Offchain SM Definition | **Full integration** | `pipe:sys:define-offchain-sm-v1` |
+| Offchain Schema Definition | **Full integration** | `pipe:sys:define-offchain-schema-v1` |
+| Onchain document create | **Stub** | Return `{ success: true }`; API not provided |
+| Onchain document transition | **Stub** | Return `{ success: true }`; API not provided |
+| Offchain registry/config | **Stub** | Return `{ success: true }`; API not provided |
+
+---
+
+## 3. Monorepo Placement & Folder Structure
+
+ParamGateway is called **from the Wallet Frontend only**. The Wallet Backend does not call ParamGateway; it reads from MongoDB (written by SyncFactory).
+
+**Placement in monorepo:**
+
+```
+paramplatform_v2/
+├── packages/
+│   ├── wallet-backend/          # Does NOT call ParamGateway
+│   └── wallet-frontend/
+│       └── src/
+│           └── api/
+│               └── paramgateway/    ← ParamGateway integration lives here
+│                   ├── client.ts           # Base URL, headers, fetch/axios
+│                   ├── executePipeline.ts  # POST pipelines/{id}/execute
+│                   ├── getBatchTasks.ts    # GET batches/{batchId}/tasks
+│                   ├── definitions/       # Full integration
+│                   │   ├── onchainSm.ts
+│                   │   ├── onchainSchema.ts
+│                   │   ├── offchainSm.ts
+│                   │   └── offchainSchema.ts
+│                   ├── stubs/             # Stub until API provided
+│                   │   ├── documentCreate.ts
+│                   │   └── documentTransition.ts
+│                   └── types.ts
+```
+
+**Environment variable:** `VITE_PARAMGATEWAY_BASE_URL` (e.g. `http://speedtest.param.network:8450`)
+
+---
+
+## 4. Foundational Principles
 
 ### P1: Pipeline-Based Definition Creation
 
@@ -91,16 +139,16 @@ ParamGateway → NATS → gPRM → paramledger → SyncFactory → MongoDB. The 
 
 ---
 
-## 3. API Base Configuration
+## 5. API Base Configuration
 
-### 3.1 Base URL
+### 5.1 Base URL
 
 | Environment | Base URL |
 |-------------|----------|
 | Development | `http://speedtest.param.network:8450` |
 | Production | Configure per deployment |
 
-### 3.2 Required Headers
+### 5.2 Required Headers
 
 | Header | Required | Description | Example |
 |--------|----------|-------------|---------|
@@ -108,14 +156,14 @@ ParamGateway → NATS → gPRM → paramledger → SyncFactory → MongoDB. The 
 | `X-Gateway-Role` | Yes | User role in gateway | `admin` |
 | `X-Workspace` | Yes | Exchange/workspace context | `test-exchange` |
 
-### 3.3 Optional Headers (Session Auth)
+### 5.3 Optional Headers (Session Auth)
 
 | Header | Description |
 |--------|-------------|
 | `Cookie` | Gateway session cookie (e.g. `gateway-theme=light; gateway-role=admin; mongo-express=...`) |
 | `Referer` | Origin URL (e.g. `http://speedtest.param.network:8450/`) |
 
-### 3.4 Pipeline ID URL Encoding
+### 5.4 Pipeline ID URL Encoding
 
 Pipeline IDs contain colons. Use URL-encoded form in the path:
 
@@ -128,9 +176,9 @@ Pipeline IDs contain colons. Use URL-encoded form in the path:
 
 ---
 
-## 4. Pipeline Execute API — Unified Spec
+## 6. Pipeline Execute API — Unified Spec
 
-### 4.1 Endpoint
+### 6.1 Endpoint
 
 ```
 POST {baseUrl}/api/pipelines/{pipelineId}/execute?dryRun=false
@@ -139,13 +187,13 @@ POST {baseUrl}/api/pipelines/{pipelineId}/execute?dryRun=false
 - `{pipelineId}`: URL-encoded pipeline ID (e.g. `pipe%3Asys%3Adefine-sm-v1`)
 - `dryRun`: `false` for real execution; `true` for validation only (no write)
 
-### 4.2 Request
+### 6.2 Request
 
 - **Method:** POST
 - **Headers:** `Content-Type: application/json`, `X-Gateway-Role`, `X-Workspace`
 - **Body:** JSON array of definition objects. One or more items per request.
 
-### 4.3 Response (Success)
+### 6.3 Response (Success)
 
 ```json
 {
@@ -170,7 +218,7 @@ POST {baseUrl}/api/pipelines/{pipelineId}/execute?dryRun=false
 | `data.status` | string | `"running"` — processing started |
 | `data.totalDocs` | number | Total documents in the request |
 
-### 4.4 cURL Example (Generic)
+### 6.4 cURL Example (Generic)
 
 ```bash
 curl -X POST 'http://speedtest.param.network:8450/api/pipelines/pipe%3Asys%3Adefine-sm-v1/execute?dryRun=false' \
@@ -182,20 +230,20 @@ curl -X POST 'http://speedtest.param.network:8450/api/pipelines/pipe%3Asys%3Adef
 
 ---
 
-## 5. Batch Task Status API
+## 7. Batch Task Status API
 
-### 5.1 Endpoint
+### 7.1 Endpoint
 
 ```
 GET {baseUrl}/api/batches/{batchId}/tasks
 ```
 
-### 5.2 Request
+### 7.2 Request
 
 - **Method:** GET
 - **Headers:** `X-Gateway-Role`, `X-Workspace` (and `Cookie` if using session auth)
 
-### 5.3 Response
+### 7.3 Response
 
 ```json
 {
@@ -227,7 +275,7 @@ GET {baseUrl}/api/batches/{batchId}/tasks
 }
 ```
 
-### 5.4 Task Item Fields
+### 7.4 Task Item Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -243,14 +291,14 @@ GET {baseUrl}/api/batches/{batchId}/tasks
 | `createdAt` | string | ISO 8601 |
 | `updatedAt` | string | ISO 8601 |
 
-### 5.5 Status Semantics
+### 7.5 Status Semantics
 
 | Status | Meaning |
 |--------|---------|
 | `running` | Pipeline is still processing; SyncFactory has not yet written |
 | `synced` | Completed; SyncFactory has written to MongoDB; `txnId` available |
 
-### 5.6 cURL Example
+### 7.6 cURL Example
 
 ```bash
 curl 'http://speedtest.param.network:8450/api/batches/b5bf4409-fbf9-4d6a-8764-c266033d7bdd/tasks' \
@@ -260,19 +308,19 @@ curl 'http://speedtest.param.network:8450/api/batches/b5bf4409-fbf9-4d6a-8764-c2
 
 ---
 
-## 6. Onchain SM Definition — Full Spec
+## 8. Onchain SM Definition — Full Spec
 
-### 6.1 Pipeline
+### 8.1 Pipeline
 
 `pipe:sys:define-sm-v1`
 
-### 6.2 Request
+### 8.2 Request
 
 **Endpoint:** `POST {baseUrl}/api/pipelines/pipe%3Asys%3Adefine-sm-v1/execute?dryRun=false`
 
 **Body:** JSON array of onchain SM definition objects.
 
-### 6.3 Request Payload Schema
+### 8.3 Request Payload Schema
 
 ```javascript
 [
@@ -326,11 +374,11 @@ curl 'http://speedtest.param.network:8450/api/batches/b5bf4409-fbf9-4d6a-8764-c2
 ]
 ```
 
-### 6.4 Response
+### 8.4 Response
 
-Same as Section 4.3 — `status: "accepted"`, `data.batchIds`, `data.status: "running"`.
+Same as Section 6.3 — `status: "accepted"`, `data.batchIds`, `data.status: "running"`.
 
-### 6.5 MongoDB Storage
+### 8.5 MongoDB Storage
 
 SyncFactory writes to `param_definitions.onchain_sm_definitions`. Document structure matches request payload; `_id` = `defId`.
 
@@ -350,19 +398,19 @@ SyncFactory writes to `param_definitions.onchain_sm_definitions`. Document struc
 
 ---
 
-## 7. Onchain Schema Definition — Full Spec
+## 9. Onchain Schema Definition — Full Spec
 
-### 7.1 Pipeline
+### 9.1 Pipeline
 
 `pipe:sys:define-schema-v1`
 
-### 7.2 Request
+### 9.2 Request
 
 **Endpoint:** `POST {baseUrl}/api/pipelines/pipe%3Asys%3Adefine-schema-v1/execute?dryRun=false`
 
 **Body:** JSON array of onchain schema definition objects.
 
-### 7.3 Request Payload Schema
+### 9.3 Request Payload Schema
 
 ```javascript
 [
@@ -409,51 +457,51 @@ SyncFactory writes to `param_definitions.onchain_sm_definitions`. Document struc
 
 **Field semantics:** Each leaf field has `order: N` (shown in UI) or `hidden: true` (stored, not rendered). Groups: `contact` (party), `object` (domain data), `array` (repeating rows with `items.properties`).
 
-### 7.4 Response
+### 9.4 Response
 
-Same as Section 4.3.
+Same as Section 6.3.
 
-### 7.5 MongoDB Storage
+### 9.5 MongoDB Storage
 
 SyncFactory writes to `param_definitions.onchain_schema_definitions`. Document structure matches request; `_id` = `defId`.
 
 ---
 
-## 8. Offchain SM Definition — Full Spec
+## 10. Offchain SM Definition — Full Spec
 
-### 8.1 Pipeline
+### 10.1 Pipeline
 
 `pipe:sys:define-offchain-sm-v1`
 
-### 8.2 Request
+### 10.2 Request
 
 **Endpoint:** `POST {baseUrl}/api/pipelines/pipe%3Asys%3Adefine-offchain-sm-v1/execute?dryRun=false`
 
 **Body:** JSON array of offchain SM definition objects. Payload shape is the same as onchain SM (defId, smType, displayName, desc, phaseMapping, roles, startAt, states). See Section 6.3 for full structure.
 
-### 8.3 Response
+### 10.3 Response
 
-Same as Section 4.3.
+Same as Section 6.3.
 
-### 8.4 MongoDB Storage
+### 10.4 MongoDB Storage
 
 SyncFactory writes to `param_definitions.offchain_sm_definitions`. Document structure matches request; `_id` = `defId`. Offchain SM states define collections: `shape: "registry"` → `offchain_registry_{Name}`; `shape: "config"` → `offchain_config_{Name}`.
 
 ---
 
-## 9. Offchain Schema Definition — Full Spec
+## 11. Offchain Schema Definition — Full Spec
 
-### 9.1 Pipeline
+### 11.1 Pipeline
 
 `pipe:sys:define-offchain-schema-v1`
 
-### 9.2 Request
+### 11.2 Request
 
 **Endpoint:** `POST {baseUrl}/api/pipelines/pipe%3Asys%3Adefine-offchain-schema-v1/execute?dryRun=false`
 
 **Body:** JSON array of offchain schema definition objects.
 
-### 9.3 Request Payload Schema
+### 11.3 Request Payload Schema
 
 ```javascript
 [
@@ -478,11 +526,11 @@ SyncFactory writes to `param_definitions.offchain_sm_definitions`. Document stru
 ]
 ```
 
-### 9.4 Response
+### 11.4 Response
 
-Same as Section 4.3.
+Same as Section 6.3.
 
-### 9.5 MongoDB Storage
+### 11.5 MongoDB Storage
 
 SyncFactory writes to `param_definitions.offchain_schema_definitions`. Document structure matches request; `_id` = `defId`.
 
@@ -510,7 +558,7 @@ SyncFactory writes to `param_definitions.offchain_schema_definitions`. Document 
 
 ---
 
-## 10. MongoDB Storage — Definition Outcomes
+## 12. MongoDB Storage — Definition Outcomes
 
 | Pipeline | Collection | Writer |
 |----------|------------|--------|
@@ -523,7 +571,7 @@ Document `_id` is always `defId` from the request. The Wallet Backend reads from
 
 ---
 
-## 11. Stub APIs — Not Yet Documented
+## 13. Stub APIs — Not Yet Documented
 
 The following operations do **not** have ParamGateway API documentation. Implement **stub functions** that return success. Replace with real integration when APIs are provided.
 
@@ -536,9 +584,9 @@ The following operations do **not** have ParamGateway API documentation. Impleme
 
 ---
 
-## 12. Integration Flow & Implementation Notes
+## 14. Integration Flow & Implementation Notes
 
-### 12.1 Create/Update Definition Flow
+### 14.1 Create/Update Definition Flow
 
 1. User submits definition form in Definitions Hub.
 2. Frontend calls `POST /api/pipelines/{pipelineId}/execute?dryRun=false` with payload.
@@ -546,31 +594,18 @@ The following operations do **not** have ParamGateway API documentation. Impleme
 4. For each `batchId`, poll `GET /api/batches/{batchId}/tasks` until all tasks have `status: "synced"`.
 5. On completion, show success; Wallet Backend will serve the new definition on next read.
 
-### 12.2 Polling Strategy
+### 14.2 Polling Strategy
 
 - Poll interval: 2–3 seconds.
 - Timeout: e.g. 60 seconds to avoid infinite wait.
 - Check `items[].status` for each task; when all are `synced`, processing is complete.
 
-### 12.3 Error Handling
+### 14.3 Error Handling
 
 - Non-2xx from execute: surface error to user.
 - Task `status: "failed"` or error phase: surface error, allow retry.
 - Network timeout: retry or show connection error.
 
-### 12.4 Suggested API Client Structure
+### 14.4 API Client Structure
 
-```
-paramGateway/
-├── client.ts           # Base URL, headers, fetch wrapper
-├── executePipeline.ts # POST pipelines/{id}/execute
-├── getBatchTasks.ts    # GET batches/{batchId}/tasks
-├── definitions/
-│   ├── onchainSm.ts
-│   ├── onchainSchema.ts
-│   ├── offchainSm.ts
-│   └── offchainSchema.ts
-└── stubs/
-    ├── documentCreate.ts
-    └── documentTransition.ts
-```
+See Section 3 (Monorepo Placement & Folder Structure) for the full folder layout.
