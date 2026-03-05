@@ -25,7 +25,7 @@
 
 ```
 VITE_API_BASE_URL=http://localhost:3001/api/v1
-VITE_PARAMGATEWAY_BASE_URL=http://localhost:4001   # stub; real URL later
+VITE_PARAMGATEWAY_BASE_URL=http://speedtest.param.network:8450   # ParamGateway; definitions full integration
 ```
 
 ---
@@ -52,9 +52,18 @@ packages/wallet-frontend/
 │   │   ├── documents.api.ts            # /documents, /documents/:id, /actions, /diff, /chain
 │   │   ├── offchain.api.ts             # /offchain/* endpoints
 │   │   └── paramgateway/
-│   │       ├── client.ts               # Stub axios instance
-│   │       ├── stubs.ts                # All ParamGateway stub functions (return { success: true })
-│   │       └── types.ts                # ParamGateway payload types
+│   │       ├── client.ts               # Base URL, headers (X-Gateway-Role, X-Workspace), fetch/axios
+│   │       ├── executePipeline.ts      # POST pipelines/{id}/execute
+│   │       ├── getBatchTasks.ts        # GET batches/{batchId}/tasks
+│   │       ├── definitions/           # Full integration: execute → poll until synced
+│   │       │   ├── onchainSm.ts
+│   │       │   ├── onchainSchema.ts
+│   │       │   ├── offchainSm.ts
+│   │       │   └── offchainSchema.ts
+│   │       ├── stubs/                  # Stub until API provided
+│   │       │   ├── documentCreate.ts
+│   │       │   └── documentTransition.ts
+│   │       └── types.ts
 │   │
 │   ├── store/
 │   │   ├── auth.store.ts               # user, token, paramId
@@ -89,7 +98,7 @@ packages/wallet-frontend/
 │   │   │   ├── OnchainSM/
 │   │   │   │   ├── OnchainSMList.tsx
 │   │   │   │   ├── OnchainSMDetail.tsx
-│   │   │   │   └── OnchainSMForm.tsx   # Create/Edit — calls ParamGateway stub
+│   │   │   │   └── OnchainSMForm.tsx   # Create/Edit — calls ParamGateway full integration
 │   │   │   ├── OnchainSchema/
 │   │   │   │   ├── OnchainSchemaList.tsx
 │   │   │   │   ├── OnchainSchemaDetail.tsx
@@ -268,7 +277,7 @@ Build each phase independently. Each phase is demoable.
 
 **Goal:** All six definition types: Create, View, Edit.
 
-**Backend calls:** All Wallet Backend for reads and writes except onchain/offchain SM and Schema deploys (ParamGateway stubs).
+**Backend calls:** All Wallet Backend for reads and writes. Onchain/offchain SM and Schema deploys use ParamGateway full integration (execute → poll until synced).
 
 13. **Definitions API** (`api/definitions.api.ts`)
     - `getSuperapps()`, `getSuperapp(id)`, `createSuperapp(body)`, `updateSuperapp(id, body)`
@@ -279,40 +288,19 @@ Build each phase independently. Each phase is demoable.
     - `getRbacMatrix(superAppId)`, `getRbacMatrixForSM(superAppId, smId)`
     - `createRbacMatrix(body)`, `updateRbacMatrix(superAppId, smId, body)`
 
-14. **ParamGateway stubs** (`api/paramgateway/stubs.ts`)
+14. **ParamGateway integration** (`api/paramgateway/`)
 
-    ```typescript
-    // Stubbed: returns { success: true }; real API TBD
-    export async function deployOnchainSM(payload: DeployOnchainSMPayload): Promise<{ success: true }> {
-      // TODO: POST /pipelines with mnemonic:"define", defType:"statemachine"
-      return { success: true };
-    }
+    **Definitions — full integration** (execute pipeline → poll task status until synced):
+    - `definitions/onchainSm.ts` — `deployOnchainSM(payload)` → `pipe:sys:define-sm-v1`
+    - `definitions/onchainSchema.ts` — `deployOnchainSchema(payload)` → `pipe:sys:define-schema-v1`
+    - `definitions/offchainSm.ts` — `deployOffchainSM(payload)` → `pipe:sys:define-offchain-sm-v1`
+    - `definitions/offchainSchema.ts` — `deployOffchainSchema(payload)` → `pipe:sys:define-offchain-schema-v1`
 
-    export async function deployOnchainSchema(payload: DeployOnchainSchemaPayload): Promise<{ success: true }> {
-      // TODO: POST /pipelines with mnemonic:"define", defType:"schema"
-      return { success: true };
-    }
+    Flow: `POST /api/pipelines/{pipelineId}/execute?dryRun=false` → receive `batchIds` → poll `GET /api/batches/{batchId}/tasks` every 2–3s until all tasks `status: "synced"`. Required headers: `X-Gateway-Role`, `X-Workspace`.
 
-    export async function deployOffchainSM(payload: DeployOffchainSMPayload): Promise<{ success: true }> {
-      return { success: true };
-    }
-
-    export async function deployOffchainSchema(payload): Promise<{ success: true }> {
-      return { success: true };
-    }
-
-    export async function createDocument(pipelineId: string, payload: CreateDocPayload): Promise<{ success: true }> {
-      // TODO: POST /pipelines/:id/execute
-      return { success: true };
-    }
-
-    export async function transitionDocument(pipelineId: string, payload: TransitionPayload): Promise<{ success: true }> {
-      // TODO: POST /pipelines/:id/execute with _chain.stateTo
-      return { success: true };
-    }
-    ```
-
-    All stubs log a `console.warn("ParamGateway stub called")` so future integration is easy to locate.
+    **Document operations — stubs** (return `{ success: true }`; API not yet provided):
+    - `stubs/documentCreate.ts` — `createDocument(pipelineId, payload)`
+    - `stubs/documentTransition.ts` — `transitionDocument(pipelineId, payload)`
 
 15. **Definitions Hub Layout** (`layouts/DefinitionsLayout.tsx`)
     - No workspace context; no workspace switcher
@@ -327,10 +315,10 @@ Build each phase independently. Each phase is demoable.
 17. **OnchainSMList/Detail/Form** (`pages/definitions/OnchainSM/`)
     - List: SM ID, Name, Type (@sm/Commerce etc.), States count
     - Detail (right panel): SM ID, Roles, Start State, View JSON, Edit, "Use in SuperApp"
-    - Create/Edit form → calls `deployOnchainSM(payload)` stub → show success toast
+    - Create/Edit form → calls `deployOnchainSM(payload)` (ParamGateway full integration) → poll until synced → show success toast
     - Read from `GET /definitions/sm`
 
-18. **OnchainSchema, OffchainSM, OffchainSchema** — same three-panel pattern as above
+18. **OnchainSchema, OffchainSM, OffchainSchema** — same three-panel pattern; each Create/Edit form calls the corresponding ParamGateway definition function (full integration: execute → poll until synced)
 
 19. **SuperApp Definition Form** (`pages/definitions/SuperAppDefs/SuperAppDefForm.tsx`)
     - Name, Description, Version, Sponsor Role (select from roles array)
@@ -588,23 +576,35 @@ Summary of which Wallet Backend endpoints each frontend section calls:
 
 ---
 
-## 5. ParamGateway Integration (Stubs)
+## 5. ParamGateway Integration
 
-All the following operations are stubbed. Each stub function is in `api/paramgateway/stubs.ts` and returns `{ success: true }`. When ParamGateway API documentation is provided, only the stub function body needs to change — no frontend UI changes required.
+### 5.1 Full Integration — Definitions
+
+| Operation | Function | Pipeline ID | Flow |
+|---|---|---|---|
+| Deploy onchain SM | `deployOnchainSM(payload)` | `pipe:sys:define-sm-v1` | Execute → poll until synced |
+| Deploy onchain Schema | `deployOnchainSchema(payload)` | `pipe:sys:define-schema-v1` | Same |
+| Deploy offchain SM | `deployOffchainSM(payload)` | `pipe:sys:define-offchain-sm-v1` | Same |
+| Deploy offchain Schema | `deployOffchainSchema(payload)` | `pipe:sys:define-offchain-schema-v1` | Same |
+
+**Required headers:** `X-Gateway-Role`, `X-Workspace`, `Content-Type: application/json`  
+**Env var:** `VITE_PARAMGATEWAY_BASE_URL`  
+**Polling:** 2–3s interval; timeout ~60s; complete when all tasks `status: "synced"`.
+
+### 5.2 Stubs — Document Operations
 
 | Operation | Stub Function | Triggered By |
 |---|---|---|
-| Deploy onchain SM | `deployOnchainSM(payload)` | Definitions → Create Onchain SM → submit |
-| Deploy onchain Schema | `deployOnchainSchema(payload)` | Definitions → Create Onchain Schema → submit |
-| Deploy offchain SM | `deployOffchainSM(payload)` | Definitions → Create Offchain SM → submit |
-| Deploy offchain Schema | `deployOffchainSchema(payload)` | Definitions → Create Offchain Schema → submit |
 | Create document | `createDocument(pipelineId, payload)` | Document Testing → Create → submit |
 | Transition document | `transitionDocument(pipelineId, payload)` | Document Testing → Action button |
+| Offchain registry/config | (stub) | Master Data → create/update |
 
-**Integration pattern (future):**
-1. Stub function body is replaced with real HTTP call to `VITE_PARAMGATEWAY_BASE_URL`
-2. Success/error handling already wired in the calling component — no UI changes
-3. On success: invalidate document list query → TanStack Query refetches → UI updates
+Each stub returns `{ success: true }`. Replace with real integration when ParamGateway APIs are documented.
+
+### 5.3 On Success
+
+- Definitions: invalidate definitions query → TanStack Query refetches → Wallet Backend serves new definition from MongoDB
+- Document create/transition: invalidate document list query → UI updates
 
 ---
 
@@ -734,7 +734,7 @@ const canCreate = startStateOwner.includes(effectiveRole) && startStateTeamAcces
 
 ### Coverage Targets
 
-- `api/paramgateway/stubs.ts`: 100% (must confirm stubs return `{ success: true }`)
+- `api/paramgateway/definitions/*`: 100% (execute + poll flow); `api/paramgateway/stubs/*`: 100% (return `{ success: true }`)
 - `lib/rbac.ts`: 100%
 - `components/forms/SchemaForm.tsx`: 90%+ (critical rendering logic)
 - All API wrappers: happy path + network error handling

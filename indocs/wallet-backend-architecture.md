@@ -81,7 +81,7 @@ This document describes the architecture of Wallet Backend 5.0: its place in the
 
 - It does **NOT write** business documents (no writes to `sm_*`, `txn_history`, `chain_head`, `offchain_*`)
 - It does **NOT submit** transactions to the blockchain (that's ParamGateway → gPRM)
-- It does **NOT sync** on-chain SM definitions or schema definitions (SyncFactory pushes `onchain_sm_definitions`, `onchain_schema_definitions`, `offchain_sm_definitions`, `offchain_schema_definitions` via `define` mnemonic)
+- It does **NOT sync** on-chain SM definitions or schema definitions (SyncFactory writes these when triggered by ParamGateway pipelines executed from the frontend)
 - It **DOES write** `superapp_definitions` and `team_rbac_matrix` to `param_definitions` (SuperApp blueprints and RBAC configuration are platform responsibilities)
 - It does **NOT run** consensus, encryption, or IPFS storage (Kernel layer)
 - It does **NOT own** authentication credentials or key management (ENN)
@@ -97,8 +97,8 @@ This document describes the architecture of Wallet Backend 5.0: its place in the
 | Blockchain ledger (`txn_*`) | Kernel internal | SyncFactory | Nobody (kernel internal) |
 | SM documents (`sm_*`, `chain_head`, `txn_history`) | Org Partition DB (`{subdomain}_{superappId[0:8]}_{org[2:22]}_{portal}`) | SyncFactory | Wallet Backend (Query Engine) |
 | OffChain data (`offchain_registry_*`, `offchain_config_*`) | SuperApp DB (`{subdomain}_{superappId[0:8]}`) | SyncFactory / ParamGateway | Wallet Backend (Query Engine) |
-| On-chain SM + Schema definitions (`onchain_sm_definitions`, `onchain_schema_definitions`) | `param_definitions` | **SyncFactory** (`define` mnemonic) | Wallet Backend |
-| OffChain definitions (`offchain_sm_definitions`, `offchain_schema_definitions`) | `param_definitions` | **SyncFactory** (`define` mnemonic) | Wallet Backend |
+| On-chain SM + Schema definitions (`onchain_sm_definitions`, `onchain_schema_definitions`) | `param_definitions` | **SyncFactory** (triggered by ParamGateway pipelines from frontend) | Wallet Backend |
+| OffChain definitions (`offchain_sm_definitions`, `offchain_schema_definitions`) | `param_definitions` | **SyncFactory** (triggered by ParamGateway pipelines from frontend) | Wallet Backend |
 | SuperApp blueprints + RBAC (`superapp_definitions`, `team_rbac_matrix`) | `param_definitions` | **Wallet Backend** (Platform Manager) | Wallet Backend |
 | Workspace config (`plants`, `installed_superapps`, `email_config`) | `{subdomain}` (Workspace DB) | Wallet Backend (Platform Manager) | Wallet Backend |
 | Domain registry (`subdomains`, `subdomain_users`) | `param_saas` | Wallet Backend (Platform Manager) | Wallet Backend |
@@ -111,7 +111,7 @@ This document describes the architecture of Wallet Backend 5.0: its place in the
 
 `param_definitions` is the single database for all structural definitions. It has **two writers** with distinct responsibilities:
 
-**SyncFactory** writes (via the `define` mnemonic — these are blockchain-derived, synced from on-chain events):
+**SyncFactory** writes (triggered by ParamGateway pipelines executed from the frontend — these are blockchain-derived, synced from on-chain events):
 - `onchain_sm_definitions` — State machine states, substates, microstates with L1 owner/visibility rules
 - `onchain_schema_definitions` — Field schemas for SM states
 - `offchain_sm_definitions` — OffChain SM definitions (collection type, schema, which SuperApps they serve)
@@ -143,6 +143,8 @@ The copy enables workspace-level customization (e.g., adjusting team permissions
 ### P4: All Data Enters via ParamGateway
 
 Business documents, state machine transitions, bulk imports — all enter via ParamGateway → NATS → kernel. The frontend never submits directly to gPRM. Wallet Backend never submits transactions.
+
+> **ParamGateway is called from the Wallet Frontend only.** The Wallet Backend does not call ParamGateway. Definitions (onchain SM, schema, offchain SM, schema) are written to `param_definitions` by SyncFactory after the frontend executes ParamGateway pipelines (`POST /api/pipelines/{pipelineId}/execute`) and polls task status until synced. Document create/transition are currently stubbed (return `{ success: true }`); real APIs to be wired when provided.
 
 ---
 
@@ -1429,6 +1431,19 @@ Shared infrastructure: MongoDB connection pool (`db/mongo.ts`), DB resolver (`db
 
 Base path: `/api/v1`. All requests require `Authorization: Bearer <token>`, `X-Param-ID`, `X-Workspace` headers unless noted otherwise. **Exception:** `GET /profile` can be called without `X-Workspace` and `X-SuperApp-ID` (e.g. post-login); when absent, only user profile is returned.
 
+**Standard error response** (all engines):
+```json
+{ "error": "<human-readable message>", "code": "<optional-error-code>" }
+```
+| HTTP | When |
+|------|------|
+| 400 | Bad request — invalid body, missing required param, schema validation failure |
+| 401 | Unauthorized — missing/invalid token, session expired |
+| 403 | Forbidden — valid token but RBAC blocks access |
+| 404 | Not found — resource (doc, org, user, etc.) does not exist |
+| 409 | Conflict — duplicate key, org already onboarded, etc. |
+| 502 | Bad gateway — ENN or external service unavailable |
+
 ---
 
 ### 15.1 Workspace APIs
@@ -1478,7 +1493,7 @@ PUT    /workspace
 **Body:** `{ workspaceName }`
 **Guard:** Workspace admin.
 **Action:** Updates `workspaceName` in `param_saas.subdomains`.
-**Response:** Updated subdomains document.
+**Response:** Updated subdomains document. Same shape as GET /workspace: `{ subdomain, workspaceName, exchangeParamId, createdAt }`.
 
 ---
 
@@ -1500,7 +1515,7 @@ POST   /workspace/plants
 **Body:** `{ code, name, paramId, location }`
 **Guard:** Workspace admin.
 **Action:** Inserts into `{subdomain}.plants`.
-**Response:** Created plant document.
+**Response:** Created plant document. Shape: `{ code, name, paramId, location, isActive: true }` — same as GET /workspace/plants items.
 
 ---
 
@@ -1510,7 +1525,7 @@ PUT    /workspace/plants/:plantCode
 **Body:** `{ name?, location? }`
 **Guard:** Workspace admin.
 **Action:** Updates matching plant in `{subdomain}.plants`.
-**Response:** Updated plant document.
+**Response:** Updated plant document. Same shape as GET /workspace/plants items.
 
 ---
 
@@ -1556,7 +1571,10 @@ GET    /user/profile
 ```
 **Guard:** Authenticated.
 **Reads:** `param_saas.subdomain_users` where `userId = SHA256(caller.email)`.
-**Response:** User profile only (same shape as `profile.user` above). Use when only user data is needed.
+**Response:** User profile only. Same shape as `profile.user` above:
+```json
+{ "userId": "<sha256(email)>", "email": "scm@bosch.com", "name": "SCM Team Lead", "subdomains": ["bosch-exim"] }
+```
 
 ---
 
@@ -1566,7 +1584,7 @@ PUT    /user/profile
 **Body:** `{ name }`
 **Guard:** Authenticated (own profile only).
 **Action:** Updates `name` in `param_saas.subdomain_users`.
-**Response:** Updated subdomain_users document.
+**Response:** Updated subdomain_users document. Shape: `{ _id, email, userId, name, subdomains[], ... }` (Section 7.2).
 
 ---
 
@@ -1576,20 +1594,21 @@ PUT    /user/profile
 
 Wallet Backend reads all definition collections. It writes only `superapp_definitions` and `team_rbac_matrix`. SyncFactory writes all onchain/offchain SM and schema definitions.
 
-**Read endpoints — all return raw documents from `param_definitions`:**
-```
-GET    /definitions/superapps                          → all superapp_definitions docs
-GET    /definitions/superapps/:superAppId              → single superapp_definitions doc
-GET    /definitions/sm                                 → all onchain_sm_definitions docs
-GET    /definitions/sm/:smId                           → single onchain_sm_definitions doc
-GET    /definitions/schemas                            → all onchain_schema_definitions docs
-GET    /definitions/schemas/:schemaId                  → single onchain_schema_definitions doc
-GET    /definitions/offchain-sm                        → all offchain_sm_definitions docs
-GET    /definitions/offchain-sm/:offchainSmId          → single offchain_sm_definitions doc
-GET    /definitions/offchain-schemas/:schemaId         → single offchain_schema_definitions doc
-GET    /definitions/team-rbac-matrix/:superAppId       → all team_rbac_matrix docs for this SuperApp
-GET    /definitions/team-rbac-matrix/:superAppId/:smId → single team_rbac_matrix doc
-```
+**Read endpoints — all return raw documents from `param_definitions`. Response shape matches collection schema in Section 6.**
+
+| Endpoint | Response |
+|----------|----------|
+| `GET /definitions/superapps` | `[{ ...superapp_definitions }]` — array. Schema: Section 6.1 |
+| `GET /definitions/superapps/:superAppId` | `{ _id, name, desc, version, sponsor, roles[], linkedSMs[], ... }` — single doc. 404 if not found |
+| `GET /definitions/sm` | `[{ ...onchain_sm_definitions }]` — array. Schema: Section 6.2 |
+| `GET /definitions/sm/:smId` | `{ _id, defId, smType, displayName, desc, phaseMapping, roles, startAt, states, ... }` — single doc. 404 if not found |
+| `GET /definitions/schemas` | `[{ ...onchain_schema_definitions }]` — array. Schema: Section 6.3 |
+| `GET /definitions/schemas/:schemaId` | `{ _id, defId, displayName, desc, version, properties, ... }` — single doc. 404 if not found |
+| `GET /definitions/offchain-sm` | `[{ ...offchain_sm_definitions }]` — array. Schema: Section 6.5 |
+| `GET /definitions/offchain-sm/:offchainSmId` | `{ _id, name, desc, states, ... }` — single doc. 404 if not found |
+| `GET /definitions/offchain-schemas/:schemaId` | `{ _id, displayName, desc, version, properties, ... }` — single doc. 404 if not found |
+| `GET /definitions/team-rbac-matrix/:superAppId` | `[{ _id, superAppId, smId, smName, permissions[], ... }]` — array. Schema: Section 6.4 |
+| `GET /definitions/team-rbac-matrix/:superAppId/:smId` | `{ _id, superAppId, smId, smName, permissions[], ... }` — single doc. 404 if not found |
 
 ---
 
@@ -1622,7 +1641,18 @@ POST   /definitions/superapps
 ```
 **Guard:** Exchange-level admin.
 **Action:** Backend generates `superAppId` (20-char hex hash), creates document in `param_definitions.superapp_definitions`.
-**Response:** Created superapp_definitions document including `_id` (the generated `superAppId`).
+**Response:** Created superapp_definitions document. Shape: Section 6.1 — includes `_id` (generated superAppId), `name`, `desc`, `version`, `sponsor`, `roles[]`, `linkedSMs[]`.
+
+---
+
+```
+PUT    /definitions/superapps/:superAppId
+```
+**Body:** `{ name?, desc?, version?, sponsor?, roles[]?, linkedSMs[]? }` — partial or full update. Fields not sent are left unchanged.
+**Guard:** Exchange-level admin.
+**Action:** Updates `param_definitions.superapp_definitions` for this `superAppId`. Does not affect installed SuperApp DB copies.
+
+**Response:** Updated superapp_definitions document. Same shape as Section 6.1. 404 if superAppId not found.
 
 ---
 
@@ -1653,7 +1683,7 @@ POST   /definitions/team-rbac-matrix
 ```
 **Guard:** Exchange-level admin.
 **Action:** Creates `param_definitions.team_rbac_matrix` for this `superAppId + smId`. `_id = {superAppId[0:8]}:{smId}`. Workspace installs copy from this canonical record.
-**Response:** Created team_rbac_matrix document.
+**Response:** Created team_rbac_matrix document. Shape: Section 6.4 — `{ _id, superAppId, smId, smName, permissions[], createdAt, version }`.
 
 ---
 
@@ -1663,7 +1693,7 @@ PUT    /definitions/team-rbac-matrix/:superAppId/:smId
 **Body:** `{ permissions[] }` — full replacement of the permissions array.
 **Guard:** Exchange-level admin.
 **Action:** Replaces `permissions` in `param_definitions.team_rbac_matrix`. Does not cascade to installed SuperApp DB copies.
-**Response:** Updated team_rbac_matrix document.
+**Response:** Updated team_rbac_matrix document. Same shape as Section 6.4.
 
 ---
 
@@ -1684,7 +1714,7 @@ POST   /superapp/install
 5. Write `sapp.team_rbac_matrix` for each SM — full copy from `param_definitions.team_rbac_matrix`
 6. Append workspace to `param_saas.subdomain_users[caller.userId].subdomains` if not already present
 
-**Response:** Created installed_superapps document.
+**Response:** Created installed_superapps document. Shape: `{ _id, name, desc, version, sponsor, roles, linkedSMs, paramId, status: "active", installedAt, ... }` — full copy of superapp_definitions plus install metadata.
 
 ---
 
@@ -1756,11 +1786,11 @@ GET    /superapp/:superAppId/org/profile
 **Guard:** Authenticated; caller's org must be a member of this SuperApp (`sapp.organizations`).
 **Reads:** `sapp.organizations` where `org.paramId` = caller's paramId (from session/JWT).
 **Action:** Resolves caller's `paramId` from auth context. Queries `{ "org.paramId": paramId }`. If `partnerId` provided, adds `{ "org.partnerId": partnerId }` and returns single doc (404 if not found). If `partnerId` not provided, returns all matching org docs.
-**Response:**
-- Sponsor: single org document.
-- Partner (1 vendor): single org document.
-- Partner (2+ vendors), no `partnerId`: array of all org documents for that paramId.
-- Partner (2+ vendors), `partnerId` provided: single org document for that vendor.
+**Response:** Single org doc or array of org docs. Shape matches `sapp.organizations` (Section 9.2).
+- Sponsor: single doc `{ _id, role, orgName, paramId, isSponsorOrg, status, ... }`
+- Partner (1 vendor): single doc
+- Partner (2+ vendors), no `partnerId`: array of org docs
+- Partner (2+ vendors), `partnerId` provided: single doc. 404 if not found.
 
 ---
 
@@ -1781,7 +1811,13 @@ GET    /superapp/:superAppId/orgs
 GET    /superapp/:superAppId/orgs/:role
 ```
 **Guard:** Authenticated.
-**Response:** All organizations documents for the given role (array — multiple orgs can share a role).
+**Reads:** `sapp.organizations` where `role = :role`.
+**Response:** Array of organizations documents for the given role (multiple orgs can share a role).
+```json
+[
+  { "_id": "86bbaa78:FF:40af9b6a:LSP001", "role": "FF", "orgName": "Kuehne+Nagel", "paramId": "0x40Af9B6a...", "org": { "partnerId": "LSP001", ... }, "isSponsorOrg": false, "status": "active" }
+]
+```
 
 ---
 
@@ -1815,8 +1851,8 @@ POST   /superapp/:superAppId/partners/onboard
 4. Upsert subdomain_users record in `param_saas.subdomain_users`.
 5. Upsert org admin user in `sapp.app_users` — `isOrgAdmin: true`, `plantTeams` from body `plants`.
 
-**Response:** Created organizations document.
-
+**Response:** Created organizations document. Shape matches `sapp.organizations` (Section 9.2): `{ _id, role, org, orgAdmin, isSponsorOrg, status, onboardedAt, ... }`.
+**Error 409:** When same `role` + `org.partnerId` already exists.
 > **Note:** `POST /partners/onboard` is an admin override / bootstrap tool. In production, partner onboarding flows automatically from the Partner SM via NATS (see Section 15.5.1).
 
 ---
@@ -2175,7 +2211,7 @@ POST   /superapp/:superAppId/roles/:role/users
 **Guard:** Workspace admin or orgAdmin for this role.
 **Validation:** Each `plant` must exist in `{subdomain}.plants`. Each team must exist in `sapp.team_rbac_matrix` for this role.
 **Action:** Backend computes `userId = SHA256(email)` for each user, inserts into `sapp.app_users`. Appends workspace to `param_saas.subdomain_users[userId].subdomains` if not already present.
-**Response:** Array of created app_users documents.
+**Response:** Array of created app_users documents. Each item shape: `{ userId, email, name, role, paramId, plantTeams[], isOrgAdmin, status }` (Section 9.4).
 
 ---
 
@@ -2183,7 +2219,8 @@ POST   /superapp/:superAppId/roles/:role/users
 GET    /superapp/:superAppId/users/:userId
 ```
 **Guard:** Workspace admin, orgAdmin for this role, or caller's own userId.
-**Response:** Single app_users document.
+**Reads:** `sapp.app_users` where `userId = :userId` (and `superAppId` from context).
+**Response:** Single app_users document. Shape: Section 9.4 — `{ userId, email, name, role, paramId, plantTeams[], isOrgAdmin, status, ... }`. 404 if not found.
 
 ---
 
@@ -2193,7 +2230,7 @@ PUT    /superapp/:superAppId/users/:userId
 **Body:** `{ plantTeams?, status?, isOrgAdmin? }`
 **Guard:** Workspace admin or orgAdmin for this role.
 **Action:** Updates matching fields in `sapp.app_users`.
-**Response:** Updated app_users document.
+**Response:** Updated app_users document. Same shape as GET /users/:userId. 404 if not found.
 
 ---
 
@@ -2214,7 +2251,8 @@ DELETE /superapp/:superAppId/users/:userId
 GET    /superapp/:superAppId/team-rbac-matrix
 ```
 **Guard:** Authenticated.
-**Response:** All team_rbac_matrix documents for this SuperApp (one per SM).
+**Reads:** `sapp.team_rbac_matrix` for this SuperApp.
+**Response:** Array of team_rbac_matrix documents (one per linked SM). Shape: Section 6.4 — `[{ _id, superAppId, smId, smName, permissions[], ... }]`.
 
 ---
 
@@ -2222,7 +2260,8 @@ GET    /superapp/:superAppId/team-rbac-matrix
 GET    /superapp/:superAppId/team-rbac-matrix/:smId
 ```
 **Guard:** Authenticated.
-**Response:** Single team_rbac_matrix document for this SM.
+**Reads:** `sapp.team_rbac_matrix` where `smId = :smId`.
+**Response:** Single team_rbac_matrix document. 404 if not found.
 
 ---
 
@@ -2232,7 +2271,7 @@ PUT    /superapp/:superAppId/team-rbac-matrix/:smId
 **Body:** `{ permissions[] }` — full replacement.
 **Guard:** Workspace admin.
 **Action:** Replaces `permissions` array in `sapp.team_rbac_matrix` for this SM, sets `customizedAt = now()`. Teams referenced in permission keys must match teams defined in `param_definitions.superapp_definitions.roles[].teams` — permission levels can be adjusted but team names cannot be added or removed.
-**Response:** Updated team_rbac_matrix document.
+**Response:** Updated team_rbac_matrix document. Same shape as Section 6.4. 404 if SM not found.
 
 ---
 
@@ -2708,7 +2747,7 @@ GET    /documents/:docId/actions
 **Guard:** Authenticated. L1 + L2 + L3 enforced.
 
 **Logic:**
-1. L3 check: if `_chain._sys.restrictedTo` blocks caller → return all arrays empty with `blocked: true`
+1. L3 check: if `_chain._sys.restrictedTo` blocks caller → return `{ blocked: true, currentState, currentSubState, currentMicroState, availableActions: [], alternateNextActions: [], linkedSmActions: [] }`
 2. Get `chain_head.stateTo` → parse `currentState`, `currentSubState`, `currentMicroState`
 3. Read SM definition from `param_definitions.onchain_sm_definitions`
 4. Collect all candidate transitions:
@@ -2836,7 +2875,11 @@ GET    /offchain/registry/:collectionName
 **Guard:** Caller's org must be a member of this SuperApp (`sapp.organizations`).
 **Query params:** Any field key-value for filtering (e.g. `?portCode=INNSA`), `page`, `limit`.
 **Reads:** `offchain_registry_{collectionName}` in SuperApp DB.
-**Response:** `{ "total": N, "page": 1, "limit": 25, "records": [{ ...raw doc }] }` — identical for all partner orgs.
+**Response:**
+```json
+{ "total": 42, "page": 1, "limit": 25, "records": [{ "_id": "...", "portCode": "INNSA", "portName": "Nhava Sheva", ... }] }
+```
+`records` items match the schema from `param_definitions.offchain_schema_definitions` for this collection. 403 if not a SuperApp member.
 
 ---
 
@@ -2845,7 +2888,7 @@ GET    /offchain/registry/:collectionName/:keyValue
 ```
 **Guard:** SuperApp membership.
 **Reads:** Single record from `offchain_registry_{collectionName}` where key field = `:keyValue`. Key field identified from `offchain_sm_definitions.states[collectionName].keyField`.
-**Response:** Raw document — same for all partners.
+**Response:** Single document. Shape matches offchain_schema_definitions for this collection. 404 if key not found. 403 if not a SuperApp member.
 
 ---
 
@@ -2854,7 +2897,7 @@ GET    /offchain/config/:collectionName
 ```
 **Guard:** SuperApp membership.
 **Reads:** `offchain_config_{collectionName}` in SuperApp DB (single versioned document).
-**Response:** Raw document — same for all partners.
+**Response:** Single document. Shape matches offchain_schema_definitions for this config. 404 if collection empty. 403 if not a SuperApp member.
 
 ---
 
@@ -2863,7 +2906,7 @@ GET    /offchain/definitions
 ```
 **Guard:** SuperApp membership.
 **Reads:** `param_definitions.offchain_sm_definitions` filtered by `linkedSuperApps` containing `superAppId`.
-**Response:** `[{ ...offchain_sm_definitions doc }]`
+**Response:** Array of offchain_sm_definitions documents. Shape: Section 6.5 — `[{ _id, name, desc, states, ... }]`.
 
 ---
 
@@ -2872,7 +2915,14 @@ GET    /offchain/definitions/:offchainSmId
 ```
 **Guard:** SuperApp membership.
 **Reads:** `param_definitions.offchain_sm_definitions` + associated `offchain_schema_definitions` docs.
-**Response:** Offchain SM definition + its field schemas.
+**Response:**
+```json
+{
+  "sm": { "_id": "public:0x4f9a2c81...", "name": "Bosch EXIM OffChain SM", "states": { ... } },
+  "schemas": [{ "_id": "public:0xf02dbb30...", "displayName": "Entity-Division-Plant Master", "properties": { ... } }]
+}
+```
+`sm` = offchain_sm_definitions doc. `schemas` = array of offchain_schema_definitions for each state's schema. 404 if offchainSmId not found.
 
 ---
 
@@ -2962,7 +3012,16 @@ ENN response on failure (HTTP 500):
 { "res": "error", "status": false, "message": "Invalid otp" }
 ```
 
-`encryptedPayload` is decrypted by Wallet Backend using `SHA256(otp)` as the key with AES-CTR. The decrypted JSON contains:
+**Decryption of `encryptedPayload`**
+
+Wallet Backend decrypts `encryptedPayload` using the OTP-derived key and AES-CTR. Implementation (matches `otp.handler.ts`):
+
+1. **Key derivation:** `decryptionKey = SHA256(otp)` as a 64-character hex string (e.g. `createHash('sha256').update(otp).digest('hex')`).
+2. **Decrypt:** AES-CTR mode (e.g. `CryptoJS.AES.decrypt(encryptedPayload, decryptionKey, { mode: CryptoJS.mode.CTR })`).
+3. **Decode:** UTF-8 stringify the decrypted bytes.
+4. **Parse:** `JSON.parse(plaintext)` to obtain the payload object.
+
+The decrypted JSON contains:
 ```json
 {
   "ethID":     "0x6193b497...",   // org-level Ethereum address → stored as paramId
@@ -2970,6 +3029,8 @@ ENN response on failure (HTTP 500):
   "publicKey": "<public-key>"
 }
 ```
+
+If `encryptedPayload` is missing or decryption fails (invalid ciphertext, wrong OTP, etc.), the backend returns `null` and the response omits the `enn` object — the client receives `token`, `refreshToken`, `user`, etc., but no `enn` block.
 
 > **ENN naming note:** ENN's `ethID` maps to what the platform calls `paramId` (the 0x address). ENN's `paramID` maps to what the platform calls `pennId` (the EHPI code). These field names differ intentionally in the platform to avoid confusion.
 
@@ -3098,8 +3159,8 @@ POST   /auth/otp/verify
 **Action:**
 1. Call ENN `/v2/verify_otp` with `{ email, otp }`. ENN creates blockchain identity for first-time users during this step — no separate register call needed.
 2. If `ennResult.status = false` → 401
-3. Decrypt `encryptedPayload` using `SHA256(otp)` + AES-CTR → extract `ethID` (`paramId`) and `paramID` (`pennId`) and `publicKey`
-4. Look up user in `param_saas.subdomain_users` by `email` — if found, use stored `paramId` as fallback
+3. Decrypt `encryptedPayload` using `SHA256(otp)` as hex key + AES-CTR (see decryption steps above) → extract `ethID`, `paramID`, `publicKey`
+4. Look up user in `param_saas.subdomain_users` by `email`. Resolve `paramId` in this order: (a) `user.paramId` if user exists, (b) `ethID` from decrypted payload, (c) `ennResult.paramId` (legacy fallback). If none available → 502 "Session creation failed"
 5. `userId = SHA256(email.toLowerCase())`
 6. Generate JWT token: `{ userId, email, paramId, exp }` + UUID refresh token
 7. Store session in `param_auth.{paramId}`: `_id = "session:" + SHA256(token)`, full session fields
@@ -3123,6 +3184,7 @@ POST   /auth/otp/verify
   }
 }
 ```
+`enn` is present only when `encryptedPayload` was successfully decrypted; otherwise it is omitted.
 
 ---
 
@@ -3162,8 +3224,8 @@ POST   /auth/sso/:provider
 ```
 POST   /auth/refresh
 ```
-**Headers:** `X-Param-ID: {paramId}`
-**Body:** `{ refreshToken }`
+**Headers:** `X-Param-ID: {paramId}` (required)
+**Body:** `{ "refreshToken": "<uuid>" }`
 **Action:** Find session by `refreshToken` in `param_auth.{paramId}`. If expired → delete + 401. Otherwise: generate new token pair, insert new session document (new `_id = "session:" + SHA256(newToken)`), delete old session document. No ENN call.
 **Response:**
 ```json
@@ -3243,8 +3305,10 @@ Forwards NATS events from SyncFactory to connected browser clients (WebSocket or
 ```
 WS     /ws
 ```
-**Auth:** `Authorization` header or `?token=<access-token>` query param (WebSocket doesn't support custom headers in some clients).
+**Request:** WebSocket upgrade. **Auth:** `Authorization: Bearer <token>` header or `?token=<access-token>` query param (WebSocket doesn't support custom headers in some clients). `X-Workspace` required for event filtering.
 **Action:** Validates session from `param_auth`, registers connection in hub keyed by `userId`.
+**On auth failure:** Connection rejected or closed with code 4401. No event payload sent.
+**On success:** Client receives event stream (see Section 18.3 for payload shape).
 
 ---
 
@@ -3284,8 +3348,10 @@ On NATS event received:
 ```
 GET    /sse
 ```
-**Auth:** `Authorization` header or `?token=` query param.
-Same event stream as WebSocket for clients that cannot use WS.
+**Request:** GET with `Authorization: Bearer <token>` or `?token=` query param. `X-Workspace` required.
+**Auth:** Validates session from `param_auth`.
+**On auth failure:** 401 with `{ "error": "Unauthorized" }`.
+**On success:** `Content-Type: text/event-stream`; same event payloads as WebSocket (Section 18.3).
 
 ---
 
@@ -3398,7 +3464,7 @@ PUT    /notifications/preferences/:superAppId
 **Guard:** Authenticated (own preferences only).
 **Body:** `{ channels: { email?, slack?, whatsapp?, inApp? } }`
 **Action:** Upserts `notification_preferences` for caller's `userId` in `{subdomain}_{superAppId[0:8]}`.
-**Response:** Updated preferences document.
+**Response:** Updated preferences document. Same shape as GET /notifications/preferences/:superAppId.
 
 ---
 
@@ -3408,7 +3474,18 @@ GET    /notifications/logs
 **Guard:** Workspace admin.
 **Query:** `superAppId?`, `from?`, `to?`, `page?`, `limit?`
 **Reads:** `notification_logs` from appropriate DB (workspace or superapp).
-**Response:** `{ "total": N, "page": 1, "limit": 25, "logs": [{ ...notification_logs doc }] }`
+**Response:**
+```json
+{
+  "total": 42,
+  "page": 1,
+  "limit": 25,
+  "logs": [
+    { "_id": "...", "userId": "<sha256>", "eventType": "state_transition", "channel": "email", "status": "sent", "sentAt": 1770447080, "docId": "0xf97a54af...", "templateId": "..." }
+  ]
+}
+```
+`logs` items: delivery audit — `eventType`, `channel`, `status` (sent/failed), `sentAt`, `docId`, `templateId`, etc. Filtered by `from`/`to` timestamp range when provided.
 
 ---
 

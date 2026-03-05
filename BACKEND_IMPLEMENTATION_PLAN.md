@@ -193,7 +193,7 @@ Build in this strict order. Each phase is independently runnable and testable be
 
 #### 2.1 Definitions Handler (`definitions.handler.ts`)
 
-Reads from `param_definitions`. Wallet Backend writes only `superapp_definitions` and `team_rbac_matrix`.
+Reads from `param_definitions`. Wallet Backend writes only `superapp_definitions` and `team_rbac_matrix`. The collections `onchain_sm_definitions`, `onchain_schema_definitions`, `offchain_sm_definitions`, `offchain_schema_definitions` are written by SyncFactory (triggered by ParamGateway pipelines executed from the frontend); the backend only reads them.
 
 ```
 GET  /definitions/superapps
@@ -638,6 +638,10 @@ ENN returns HTTP 500 for invalid OTP, user not found, etc. Wallet Backend must n
 ### Rule 6: Definitions Not Replicated to SuperApp DB
 
 `onchain_sm_definitions`, `onchain_schema_definitions`, `offchain_sm_definitions`, `offchain_schema_definitions` are always read directly from `param_definitions` at query time — never copied on install. Only `team_rbac_matrix` and sponsor org binding are copied on install.
+
+### Rule 6a: Wallet Backend Does NOT Call ParamGateway
+
+ParamGateway is called **from the Wallet Frontend only**. The Wallet Backend never calls ParamGateway. Definitions (onchain SM, schema, offchain SM, schema) are written to `param_definitions` by SyncFactory after the frontend executes ParamGateway pipelines and polls until synced. The backend reads these collections; it does not submit pipeline executions.
 
 ### Rule 7: Pagination Always Required for Document Lists
 

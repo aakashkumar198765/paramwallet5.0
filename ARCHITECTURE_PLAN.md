@@ -12,7 +12,7 @@ The Wallet Application is a mono-repo (`wallet-backend` + `wallet-frontend`) tha
 | Service | Purpose | Protocol |
 |---|---|---|
 | **Wallet Backend** (this app) | Platform ops: workspace, SuperApp install, org/user/RBAC, plants, file; document **reads only**; auth via ENN | REST/HTTP |
-| **ParamGateway** | On-chain writes only: SM definition, Schema definition, document create, document transitions | REST stub → success |
+| **ParamGateway** | Data-in layer: definitions (onchain SM, schema, offchain SM, schema) via execute pipeline + poll; document create/transition stubbed | REST (frontend only) |
 | **ENN (Keystore)** | Auth delegation: OTP send/verify, SSO verify, partner onboard | HTTP (proxied) |
 
 ### 1.2 What Wallet Backend Does
@@ -98,28 +98,32 @@ Wallet Backend (Query Engine):
 ### 2.5 Document Create Flow (via ParamGateway stub)
 
 ```
-Browser → ParamGateway stub POST /pipelines/:id/execute { payload, _chain }
-ParamGateway stub:
-  → return { success: true }   ← stub returns success; real API wired later
+Browser → ParamGateway stub (document create API not yet provided)
+  → return { success: true }   ← stub; replace when API documented
 
-Real flow (future, when ParamGateway integration is live):
-  Browser → ParamGateway → gPRM → paramledger → SyncFactory → MongoDB
+Real flow (future, when ParamGateway document-create API is provided):
+  Browser → ParamGateway POST /api/pipelines/{pipelineId}/execute → poll tasks until synced
+  ParamGateway → gPRM → paramledger → SyncFactory → MongoDB
   (SM document written by SyncFactory, not Wallet Backend)
 ```
 
-### 2.6 Definition Flow (on-chain SM/Schema via ParamGateway stub)
+### 2.6 Definition Flow (on-chain/offchain SM/Schema via ParamGateway — full integration)
 
 ```
-Browser → ParamGateway stub POST /pipelines (mnemonic: define, defType: statemachine)
-        → return { success: true }   ← stub; real integration later
+Definitions (onchain SM, onchain schema, offchain SM, offchain schema):
+  Browser → ParamGateway POST /api/pipelines/{pipelineId}/execute?dryRun=false
+        → response: { status: "accepted", data: { batchIds: [...] } }
+  Browser → poll GET /api/batches/{batchId}/tasks until all tasks status: "synced"
+        → SyncFactory has written to param_definitions; Wallet Backend serves on next read
 
-Browser → POST /definitions/superapps → Wallet Backend
+Pipeline IDs: pipe:sys:define-sm-v1, pipe:sys:define-schema-v1,
+             pipe:sys:define-offchain-sm-v1, pipe:sys:define-offchain-schema-v1
+
+SuperApp & RBAC (Wallet Backend writes):
+  Browser → POST /definitions/superapps → Wallet Backend
         → write param_definitions.superapp_definitions
-        ← created superapp_definitions document
-
-Browser → POST /definitions/team-rbac-matrix → Wallet Backend
+  Browser → POST /definitions/team-rbac-matrix → Wallet Backend
         → write param_definitions.team_rbac_matrix
-        ← created team_rbac_matrix document
 ```
 
 ---
@@ -350,50 +354,49 @@ Wallet Backend:
 
 ## 7. ParamGateway Integration Approach
 
-### 7.1 Stub Pattern
+**ParamGateway is called from the Wallet Frontend only.** The Wallet Backend does not call ParamGateway; it reads from MongoDB (written by SyncFactory).
 
-All ParamGateway calls are implemented as stub functions that return `{ success: true }`. The API library structure is complete — endpoints, types, and call signatures are defined. Only the HTTP request body is empty; return value is mocked.
+### 7.1 Full Integration — Definitions (onchain SM, schema, offchain SM, schema)
 
-```typescript
-// paramgateway/client.ts
-export async function defineStateMachine(payload: DefineSMPayload): Promise<{ success: true }> {
-  // TODO: POST /pipelines with mnemonic:"define", defType:"statemachine"
-  // Real implementation: await http.post(`${PARAMGATEWAY_URL}/pipelines`, payload)
-  return { success: true };
-}
+| Operation | Pipeline ID | Flow |
+|-----------|-------------|------|
+| Deploy onchain SM | `pipe:sys:define-sm-v1` | `POST /api/pipelines/{id}/execute` → poll `GET /api/batches/{batchId}/tasks` until `status: "synced"` |
+| Deploy onchain Schema | `pipe:sys:define-schema-v1` | Same |
+| Deploy offchain SM | `pipe:sys:define-offchain-sm-v1` | Same |
+| Deploy offchain Schema | `pipe:sys:define-offchain-schema-v1` | Same |
 
-export async function createDocument(pipelineId: string, payload: DocumentPayload): Promise<{ success: true }> {
-  // TODO: POST /pipelines/:id/execute
-  return { success: true };
-}
+**Required headers:** `X-Gateway-Role`, `X-Workspace`, `Content-Type: application/json` (POST)  
+**Env var:** `VITE_PARAMGATEWAY_BASE_URL` (e.g. `http://speedtest.param.network:8450`)
 
-export async function transitionDocument(pipelineId: string, payload: TransitionPayload): Promise<{ success: true }> {
-  // TODO: POST /pipelines/:id/execute with _chain.stateTo override
-  return { success: true };
-}
-```
+**Polling:** 2–3 second interval; timeout ~60s; complete when all tasks have `status: "synced"`.
 
 ### 7.2 Stubbed Operations (Frontend)
 
-The following operations call ParamGateway stubs (return success):
+| Operation | Stub Response | When Called |
+|-----------|--------------|-------------|
+| Onchain document create | `{ success: true }` | Document Testing → Create button |
+| Onchain document transition | `{ success: true }` | Document Testing → Action button |
+| Offchain registry/config | `{ success: true }` | Master Data → create/update |
 
-| Operation | Stub Function | When Called |
-|---|---|---|
-| Deploy onchain SM definition | `defineStateMachine(payload)` | Definitions Hub → Create Onchain SM |
-| Deploy onchain Schema definition | `defineSchema(payload)` | Definitions Hub → Create Onchain Schema |
-| Deploy offchain SM definition | `defineOffchainSM(payload)` | Definitions Hub → Create Offchain SM |
-| Deploy offchain Schema definition | `defineOffchainSchema(payload)` | Definitions Hub → Create Offchain Schema |
-| Create document | `createDocument(pipelineId, payload)` | Document Testing → Create button |
-| Transition document | `transitionDocument(pipelineId, payload)` | Document Testing → Action button |
+Replace with real integration when ParamGateway APIs are documented.
 
-### 7.3 Future Wiring
+### 7.3 Frontend Folder Structure
 
-When ParamGateway API documentation is provided:
-1. Replace stub function body with real HTTP call (base URL from `PARAMGATEWAY_URL` env)
-2. Map response to existing return type
-3. Handle error responses (validation failures, pipeline errors)
-
-No frontend changes needed — all stubs implement the same interface.
+```
+packages/wallet-frontend/src/api/paramgateway/
+├── client.ts           # Base URL, headers, fetch/axios
+├── executePipeline.ts  # POST pipelines/{id}/execute
+├── getBatchTasks.ts    # GET batches/{batchId}/tasks
+├── definitions/       # Full integration
+│   ├── onchainSm.ts
+│   ├── onchainSchema.ts
+│   ├── offchainSm.ts
+│   └── offchainSchema.ts
+├── stubs/              # Document create, transition
+│   ├── documentCreate.ts
+│   └── documentTransition.ts
+└── types.ts
+```
 
 ---
 
@@ -429,5 +432,5 @@ Wallet Backend
 | Dynamic DB resolution | Runtime resolver functions (no hardcoded DB names) | Supports multi-workspace, multi-SuperApp, multi-org at any scale without code changes |
 | Install = copy, not reference | RBAC matrix copied from `param_definitions` to SuperApp DB | Enables workspace-level RBAC customization without mutating shared definitions |
 | Auth delegation to ENN | Wallet Backend proxies auth; never handles private keys | Separation of concerns; ENN manages blockchain identity |
-| ParamGateway stubs | Return `{ success: true }` for all on-chain writes | Decouples frontend development from ParamGateway API finalization; clean integration point |
+| ParamGateway integration | Definitions: full (execute + poll); document ops: stubs | Definitions flow through ParamGateway → SyncFactory → MongoDB; document APIs stubbed until provided |
 | Org Partition DB per org | Each org's documents in a separate DB | Natural L1 RBAC boundary; MongoDB partitioning avoids cross-org data leakage |
