@@ -3,6 +3,21 @@
 
 ---
 
+## 0. Required Documentation
+
+Implementation plans and builds must follow these specs:
+
+| Document | Path |
+|----------|------|
+| Wallet Backend Architecture | `indocs/wallet-backend-architecture.md` |
+| ParamGateway API Integration | `indocs/paramgateway-api-integration.md` |
+| Frontend Control Tower Specs | `indocs/frontend-control-tower-specs.html` |
+| Param UI Design Specification | `indocs/param-ui-design-specification.html` |
+
+See `FRONTEND_IMPLEMENTATION_PLAN.md` §0 and `BACKEND_IMPLEMENTATION_PLAN.md` §0 for full spec compliance requirements.
+
+---
+
 ## 1. System Overview
 
 The Wallet Application is a mono-repo (`wallet-backend` + `wallet-frontend`) that serves as the **operational control tower** for the Param 5.0 platform. It sits in the DATA LAYER alongside ParamGateway, above the KERNEL LAYER (NATS JetStream, paramledger, gPRM, SyncFactory).
@@ -353,6 +368,8 @@ Wallet Backend:
 ---
 
 ## 7. ParamGateway Integration Approach
+
+> **Full API spec:** See `indocs/paramgateway-api-integration.md` for complete endpoint specs, payload schemas, and implementation details.
 
 **ParamGateway is called from the Wallet Frontend only.** The Wallet Backend does not call ParamGateway; it reads from MongoDB (written by SyncFactory).
 

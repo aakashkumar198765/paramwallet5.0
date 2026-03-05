@@ -3,6 +3,21 @@
 
 ---
 
+## 0. Required Documentation (Spec Compliance)
+
+**Implementation must follow these documents.** This plan is a build guide; the specs below are the source of truth. Read them before and during implementation.
+
+| Document | Purpose | Path |
+|----------|---------|------|
+| **Frontend Control Tower Specs** | UX flows, user journey, screen mockups, shell layout, navigation | `indocs/frontend-control-tower-specs.html` |
+| **Param UI Design Specification** | Design tokens (colors, spacing, typography), component specs, layout constants | `indocs/param-ui-design-specification.html` |
+| **Wallet Backend Architecture** | API contracts, data model, RBAC, endpoint schemas | `indocs/wallet-backend-architecture.md` |
+| **ParamGateway API Integration** | Pipeline execute, payload schemas, task polling, headers | `indocs/paramgateway-api-integration.md` |
+
+**Design system:** Use design tokens from `param-ui-design-specification.html`. Configure Tailwind/shadcn to use these CSS variables for colors, spacing, and typography. Layout constants (e.g. left nav 220px, right panel 260px) must match the specs.
+
+---
+
 ## 1. Technology Stack
 
 | Category | Technology | Version | Rationale |
@@ -201,6 +216,8 @@ Build each phase independently. Each phase is demoable.
 
 ### Phase 1: Foundation & Auth (Days 1–2)
 
+**Spec:** `frontend-control-tower-specs.html` §03 (Login), §04 (Post-Login)
+
 **Goal:** Login screen → authenticated shell → post-login screen.
 
 1. **Project bootstrap**
@@ -245,6 +262,8 @@ Build each phase independently. Each phase is demoable.
 
 ### Phase 2: App Shell & Navigation (Day 3)
 
+**Spec:** `frontend-control-tower-specs.html` §07 (Shell & Navigation); `param-ui-design-specification.html` — Layout Constants (sidebar 220px, right panel 260px)
+
 **Goal:** Three-panel layout; workspace context; navigation works.
 
 8. **App Shell** (`layouts/AppShell.tsx`)
@@ -274,6 +293,8 @@ Build each phase independently. Each phase is demoable.
 ---
 
 ### Phase 3: Definitions Hub (Days 4–5)
+
+**Spec:** `frontend-control-tower-specs.html` §05 (Definitions Hub), §06 (SuperApp Definition), §06b (Team RBAC Matrix); `paramgateway-api-integration.md` — definition pipelines
 
 **Goal:** All six definition types: Create, View, Edit.
 
@@ -339,6 +360,8 @@ Build each phase independently. Each phase is demoable.
 
 ### Phase 4: Workspace & SuperApp Install (Day 6)
 
+**Spec:** `frontend-control-tower-specs.html` §08 (Create Workspace), §09 (Install SuperApp), §09b (SuperApp Navigation)
+
 **Goal:** Create workspace; install SuperApps.
 
 21. **Workspace Create Form** (`pages/workspace/WorkspaceCreate.tsx`)
@@ -363,6 +386,8 @@ Build each phase independently. Each phase is demoable.
 ---
 
 ### Phase 5: Document Testing (Days 7–9)
+
+**Spec:** `frontend-control-tower-specs.html` §10 (Document Testing); `wallet-backend-architecture.md` §16 (Query Engine), §22 (RBAC Enforcement)
 
 **Goal:** Full document list, detail, create, transition flow.
 
@@ -442,6 +467,8 @@ This is the most complex phase — RBAC-filtered views, schema-driven forms, sub
 
 ### Phase 6: Settings (Days 10–11)
 
+**Spec:** `frontend-control-tower-specs.html` §11 (Settings)
+
 **Goal:** Full settings section: Profile, Users, RBAC, Orgs, Plants, Master Data.
 
 30. **Settings Layout** (`pages/workspace/settings/Settings.tsx`)
@@ -482,6 +509,8 @@ This is the most complex phase — RBAC-filtered views, schema-driven forms, sub
 ---
 
 ### Phase 7: Demo Mode (Day 12)
+
+**Spec:** `frontend-control-tower-specs.html` §12 (Demo Mode)
 
 **Goal:** Role impersonation for testing UX without separate login.
 
@@ -577,6 +606,8 @@ Summary of which Wallet Backend endpoints each frontend section calls:
 ---
 
 ## 5. ParamGateway Integration
+
+> **Full API spec:** See `indocs/paramgateway-api-integration.md` for complete endpoint specs, payload schemas, URL encoding, error handling, and MongoDB storage outcomes.
 
 ### 5.1 Full Integration — Definitions
 

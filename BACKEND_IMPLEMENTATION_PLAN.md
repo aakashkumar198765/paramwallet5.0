@@ -3,6 +3,20 @@
 
 ---
 
+## 0. Required Documentation (Spec Compliance)
+
+**Implementation must follow these documents.** This plan is a build guide; the specs below are the source of truth. Read them before and during implementation.
+
+| Document | Purpose | Path |
+|----------|---------|------|
+| **Wallet Backend Architecture** | API contracts, endpoint schemas, data model, RBAC, DB topology, collection schemas | `indocs/wallet-backend-architecture.md` |
+| **ParamGateway API Integration** | Pipeline execute flow (frontend calls; backend does NOT call ParamGateway) | `indocs/paramgateway-api-integration.md` |
+| **Frontend Control Tower Specs** | UX flows, data flow (Wallet Backend vs ParamGateway) | `indocs/frontend-control-tower-specs.html` |
+
+**Architecture sections to reference:** §15 (Platform Manager API), §16 (Query Engine API), §17 (Auth Gate), §21 (Database Resolver), §22 (RBAC Enforcement).
+
+---
+
 ## 1. Technology Stack
 
 | Category | Technology | Version | Rationale |
@@ -149,6 +163,8 @@ Build in this strict order. Each phase is independently runnable and testable be
 
 ### Phase 1: Foundation (Days 1–2)
 
+**Spec:** `wallet-backend-architecture.md` §20 (Middleware Chain), §21 (Database Resolver)
+
 **Goal:** A working Fastify server with MongoDB + middleware. No business logic yet.
 
 1. **Project bootstrap**
@@ -186,6 +202,8 @@ Build in this strict order. Each phase is independently runnable and testable be
 ---
 
 ### Phase 2: Platform Manager — Engine 1 (Days 3–6)
+
+**Spec:** `wallet-backend-architecture.md` §15 (Platform Manager — Full API Spec)
 
 **Goal:** All workspace, SuperApp, org, user, and definition management APIs working.
 
@@ -308,6 +326,8 @@ POST /superapp/:superAppId/manifest   ← atomic batch: onboard orgs + assign us
 
 ### Phase 3: Query Engine — Engine 2 (Days 7–10)
 
+**Spec:** `wallet-backend-architecture.md` §16 (Query Engine), §22 (RBAC Enforcement at Runtime)
+
 **Goal:** All document read APIs with full L1/L2/L3 RBAC enforcement.
 
 **Build RBAC filter utilities first — they underpin everything else.**
@@ -400,6 +420,8 @@ Access check: caller's `paramId` must exist in `sapp.organizations`. No L1/L2/L3
 
 ### Phase 4: Auth Gate — Engine 3 (Day 11)
 
+**Spec:** `wallet-backend-architecture.md` §17 (Auth Gate — Full API Spec)
+
 **Goal:** Complete OTP + SSO + session management.
 
 #### 4.1 ENN Client (`enn-client.ts`)
@@ -457,6 +479,8 @@ POST /auth/domain/register ← proxies ENN /v4/onboard for partner registration
 ---
 
 ### Phase 5: Integration & Hardening (Days 12–14)
+
+**Spec:** `wallet-backend-architecture.md` §23 (Project File Structure), §26 (Key Implementation Rules)
 
 **Goal:** Production-ready server; all edge cases handled.
 
@@ -641,7 +665,7 @@ ENN returns HTTP 500 for invalid OTP, user not found, etc. Wallet Backend must n
 
 ### Rule 6a: Wallet Backend Does NOT Call ParamGateway
 
-ParamGateway is called **from the Wallet Frontend only**. The Wallet Backend never calls ParamGateway. Definitions (onchain SM, schema, offchain SM, schema) are written to `param_definitions` by SyncFactory after the frontend executes ParamGateway pipelines and polls until synced. The backend reads these collections; it does not submit pipeline executions.
+ParamGateway is called **from the Wallet Frontend only**. The Wallet Backend never calls ParamGateway. Definitions (onchain SM, schema, offchain SM, schema) are written to `param_definitions` by SyncFactory after the frontend executes ParamGateway pipelines and polls until synced. The backend reads these collections; it does not submit pipeline executions. See `indocs/paramgateway-api-integration.md` for the full integration spec.
 
 ### Rule 7: Pagination Always Required for Document Lists
 
