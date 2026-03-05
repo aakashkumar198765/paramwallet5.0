@@ -1,0 +1,2 @@
+# Notes:
+- For all onchain sm, onchain schema, offchain sm, offchain schema, onchain documents/data, offchain documents/data, the api integration documentation will be provided later, so write the api library and functions, and integration, and return status success.

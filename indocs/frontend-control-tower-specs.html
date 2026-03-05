@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wallet Console — Spec v5.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f6f8fa; --surf:#ffffff; --surf2:#f0f3f6; --surf3:#e8ecf1;
+  --bdr:#d0d7de; --bdr2:#afb8c1;
+  --acc:#0969da; --a2:#1a7f37; --a3:#9a6700; --a4:#cf222e; --a5:#8250df;
+  --tx:#1f2328; --tx2:#424a53; --tx3:#656d76;
+  --grn:#1a7f37; --red:#cf222e;
+  --code:#e8ecf1; --toc:260px;
+}
+html.dark {
+  --bg:#0f1117; --surf:#161b22; --surf2:#1c2128; --surf3:#22272e;
+  --bdr:#373e47; --bdr2:#444c56;
+  --acc:#58a6ff; --a2:#3fb950; --a3:#d29922; --a4:#f85149; --a5:#a371f7;
+  --tx:#e6edf3; --tx2:#8b949e; --tx3:#6e7681;
+  --grn:#3fb950; --red:#f85149;
+  --code:#21262d;
+}
+html{scroll-behavior:smooth;}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.7;}
+
+#toc{position:fixed;inset:0 auto 0 0;width:var(--toc);background:var(--surf);border-right:1px solid var(--bdr);overflow-y:auto;z-index:100;padding-bottom:40px;}
+#toc::-webkit-scrollbar{width:4px;}
+#toc::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px;}
+.toc-head{padding:20px 18px 14px;border-bottom:1px solid var(--bdr);}
+.toc-brand{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--acc);margin-bottom:3px;}
+.toc-title{font-size:15px;font-weight:700;color:var(--tx);}
+.toc-ver{font-size:11px;color:var(--tx3);margin-top:4px;}
+.theme-fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--surf2);border:1px solid var(--bdr);box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;z-index:200;transition:all .2s;}
+.theme-fab:hover{background:var(--surf3);border-color:var(--acc);box-shadow:0 6px 20px rgba(0,0,0,.15);transform:scale(1.05);}
+.theme-fab .ll{display:inline;}.theme-fab .ld{display:none;}
+html.dark .theme-fab .ll{display:none;}html.dark .theme-fab .ld{display:inline;}
+html.dark .theme-fab{box-shadow:0 4px 24px rgba(0,0,0,.35);}
+.toc-grp{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);padding:14px 18px 5px;}
+#toc a{display:flex;align-items:center;gap:8px;padding:7px 18px;color:var(--tx2);text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:all .15s;}
+#toc a:hover{color:var(--tx);background:var(--surf2);}
+#toc a.on{color:var(--acc);background:var(--surf2);border-left-color:var(--acc);font-weight:600;}
+#toc a .n{font-size:10px;color:var(--tx3);min-width:20px;font-weight:600;}
+
+#main{margin-left:var(--toc);max-width:980px;padding:48px 56px 140px;}
+
+.hero{padding:44px 0 48px;border-bottom:1px solid var(--bdr);}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);border-radius:8px;font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;}
+.hero h1{font-size:36px;font-weight:800;letter-spacing:-.5px;line-height:1.2;color:var(--tx);margin-bottom:12px;}
+.hero h1 span{color:var(--acc);}
+.hero-sub{font-size:17px;color:var(--tx2);max-width:600px;line-height:1.65;margin-bottom:28px;}
+.meta-row{display:flex;flex-wrap:wrap;gap:24px;}
+.ml{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
+.mv{font-size:13px;font-weight:600;color:var(--tx);}
+
+.sec{padding:48px 0 0;border-bottom:1px solid var(--bdr);}
+.sec:last-child{border-bottom:none;}
+.sec-hd{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
+.sn{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;font-size:13px;font-weight:700;background:var(--surf2);border:1px solid var(--bdr);color:var(--tx3);flex-shrink:0;}
+.sn.b{background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.35);color:var(--acc);}
+.sn.t{background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.3);color:var(--a2);}
+.sn.a{background:rgba(210,153,34,.12);border-color:rgba(210,153,34,.3);color:var(--a3);}
+.sn.p{background:rgba(163,113,247,.12);border-color:rgba(163,113,247,.35);color:var(--a5);}
+.sn.r{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.3);color:var(--a4);}
+.sec h2{font-size:22px;font-weight:700;color:var(--tx);letter-spacing:-.2px;}
+h3{font-size:16px;font-weight:700;color:var(--tx);margin:28px 0 10px;}
+p{color:var(--tx2);margin-bottom:12px;font-size:15px;}
+p strong{color:var(--tx);font-weight:600;}
+
+.note{display:flex;gap:12px;padding:16px 18px;border-radius:10px;margin:18px 0;border:1px solid;}
+.note.i{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.25);}
+.note.w{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.25);}
+.note.s{background:rgba(63,185,80,.08);border-color:rgba(63,185,80,.25);}
+.ni{font-size:18px;flex-shrink:0;}
+.nt{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px;}
+.note p{margin:0;font-size:14px;color:var(--tx2);}
+
+.mockup{border-radius:12px;overflow:hidden;border:1px solid var(--bdr);box-shadow:0 4px 24px rgba(0,0,0,.08);margin:22px 0;background:var(--surf);transition:box-shadow .2s,background .2s,border-color .2s;}
+html.dark .mockup{box-shadow:0 8px 32px rgba(0,0,0,.4);}
+.mock-chrome{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--surf2);border-bottom:1px solid var(--bdr);}
+.mc-dot{width:12px;height:12px;border-radius:50%;}
+.mc-url{font-size:11px;color:var(--tx3);margin-left:8px;font-family:'JetBrains Mono',monospace;}
+.m-topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-size:12px;}
+.m-tl,.m-tr{display:flex;align-items:center;gap:10px;}
+.m-brand{font-weight:800;font-size:13px;color:var(--acc);}
+.m-ws-switcher{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;background:var(--surf3);border:1px solid var(--bdr);cursor:pointer;font-size:12px;font-weight:600;color:var(--tx);}
+.m-body{display:flex;min-height:280px;}
+.m-left{width:220px;flex-shrink:0;border-right:1px solid var(--bdr);background:var(--surf2);padding:14px 0;}
+.m-center{flex:1;padding:18px;overflow:hidden;}
+.m-right{width:260px;flex-shrink:0;border-left:1px solid var(--bdr);background:var(--surf2);padding:16px;}
+.ngrp{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--tx3);padding:12px 16px 4px;}
+.nit{padding:8px 16px;font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:8px;cursor:pointer;}
+.nit.a{background:rgba(88,166,255,.1);color:var(--acc);border-left:3px solid var(--acc);padding-left:13px;font-weight:600;}
+.nit.sub{padding-left:32px;font-size:11.5px;}
+.det-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:4px;}
+.det-val{font-size:13px;color:var(--tx);margin-bottom:12px;font-weight:500;}
+.det-val.sm{font-size:11.5px;color:var(--tx2);font-weight:400;}
+.det-divider{border:none;border-top:1px solid var(--bdr);margin:12px 0;}
+.det-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+.c-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+.c-search{font-size:12px;color:var(--tx3);padding:6px 12px;background:var(--surf3);border:1px solid var(--bdr);border-radius:8px;width:180px;}
+.c-btn{font-size:12px;font-weight:600;color:var(--acc);padding:6px 12px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);border-radius:8px;cursor:pointer;white-space:nowrap;}
+.c-btn.red{color:var(--red);background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.3);}
+.c-btn.grn{color:var(--grn);background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.3);}
+.dt{width:100%;border-collapse:collapse;font-size:12px;}
+.dt th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3);border-bottom:1px solid var(--bdr);background:var(--surf3);}
+.dt td{padding:9px 12px;color:var(--tx2);border-bottom:1px solid var(--bdr);}
+.dt tr:last-child td{border-bottom:none;}
+.dt tr.sel td{background:rgba(88,166,255,.08);color:var(--tx);}
+.dt tr:hover td{background:var(--surf3);}
+.kpi-strip{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.kpi{flex:1;min-width:80px;background:var(--surf2);border:1px solid var(--bdr);border-radius:10px;padding:12px 14px;}
+.kpi-v{font-size:22px;font-weight:800;}
+.kpi-l{font-size:10px;color:var(--tx3);margin-top:2px;}
+.m-fgrp{margin-bottom:12px;}
+.m-flbl{font-size:11px;font-weight:600;color:var(--tx3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+.m-finp{width:100%;padding:8px 12px;font-size:13px;background:var(--surf3);border:1px solid var(--bdr);border-radius:8px;color:var(--tx);font-family:'DM Sans',sans-serif;}
+.m-frow{display:flex;gap:10px;}
+.m-frow .m-fgrp{flex:1;}
+.b{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;font-size:10.5px;font-weight:600;white-space:nowrap;}
+.b.blue{background:rgba(88,166,255,.2);color:var(--acc);}
+.b.teal{background:rgba(63,185,80,.2);color:var(--a2);}
+.b.amber{background:rgba(210,153,34,.2);color:var(--a3);}
+.b.red{background:rgba(248,81,73,.2);color:var(--red);}
+.b.grn{background:rgba(63,185,80,.2);color:var(--grn);}
+.itw{overflow-x:auto;border-radius:10px;border:1px solid var(--bdr);margin:18px 0;}
+table.it{width:100%;border-collapse:collapse;font-size:14px;}
+table.it thead tr{background:var(--surf2);}
+table.it th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--tx3);border-bottom:1px solid var(--bdr);}
+table.it td{padding:12px 16px;color:var(--tx2);border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.5;}
+table.it tr:last-child td{border-bottom:none;}
+code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--surf3);border:1px solid var(--bdr);border-radius:4px;padding:2px 6px;color:var(--a2);}
+.flow-step{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-radius:10px;margin-bottom:10px;background:var(--surf2);border:1px solid var(--bdr);border-left:4px solid var(--acc);}
+.flow-num{font-size:12px;font-weight:800;color:var(--acc);min-width:28px;}
+.flow-txt{font-size:14px;color:var(--tx2);}
+.flow-txt strong{color:var(--tx);}
+.ux-caption{font-size:11px;color:var(--tx3);margin-top:8px;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;}
+
+/* Post-login elegant cards */
+.pl-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:640px){.pl-grid{grid-template-columns:1fr;}}
+.pl-card{background:var(--surf2);border:1px solid var(--bdr);border-radius:14px;padding:24px;transition:all .2s;cursor:pointer;}
+.pl-card:hover{border-color:var(--acc);box-shadow:0 4px 20px rgba(0,0,0,.06);}
+html.dark .pl-card:hover{box-shadow:0 4px 24px rgba(0,0,0,.25);}
+.pl-card.def{border-color:rgba(163,113,247,.35);background:linear-gradient(135deg,rgba(163,113,247,.04) 0%,transparent 60%);}
+.pl-card.def:hover{border-color:var(--a5);box-shadow:0 4px 20px rgba(163,113,247,.12);}
+html.dark .pl-card.def{background:linear-gradient(135deg,rgba(163,113,247,.08) 0%,transparent 60%);}
+.pl-card-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px;}
+.pl-card.def .pl-card-icon{background:rgba(163,113,247,.15);}
+.pl-card-title{font-size:16px;font-weight:700;color:var(--tx);margin-bottom:6px;}
+.pl-card-desc{font-size:13px;color:var(--tx3);line-height:1.5;margin-bottom:14px;}
+.pl-card-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--a5);padding:3px 8px;border-radius:6px;background:rgba(163,113,247,.15);margin-bottom:12px;}
+.pl-ws-item{padding:12px 14px;border-radius:10px;border:1px solid var(--bdr);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all .15s;}
+.pl-ws-item:hover{background:var(--surf3);border-color:var(--bdr2);}
+.pl-ws-item.sel{border-color:var(--acc);background:rgba(88,166,255,.08);}
+.pl-ws-item .name{font-size:14px;font-weight:600;color:var(--tx);}
+.pl-ws-item .meta{font-size:11px;color:var(--tx3);margin-top:2px;}
+.pl-ws-item .arr{font-size:12px;color:var(--tx3);}
+.pl-ws-item.sel .arr{color:var(--acc);}
+</style>
+</head>
+<body>
+
+<nav id="toc">
+  <div class="toc-head">
+    <div class="toc-brand">Param Network</div>
+    <div class="toc-title">Wallet Console</div>
+    <div class="toc-ver">Spec v5.0</div>
+  </div>
+  <div class="toc-grp">User Journey</div>
+  <a href="#overview"><span class="n">01</span> Overview</a>
+  <a href="#journey"><span class="n">02</span> User Journey Map</a>
+  <a href="#login"><span class="n">03</span> Login</a>
+  <a href="#post-login"><span class="n">04</span> Post-Login</a>
+  <div class="toc-grp">Definitions (Outside Workspace)</div>
+  <a href="#definitions"><span class="n">05</span> Definitions Hub</a>
+  <a href="#superapp-define"><span class="n">06</span> SuperApp Definition</a>
+  <a href="#rbac-matrix-def"><span class="n">06b</span> Team RBAC Matrix</a>
+  <div class="toc-grp">Workspace Context</div>
+  <a href="#shell"><span class="n">07</span> Shell & Navigation</a>
+  <a href="#workspace-create"><span class="n">08</span> Create Workspace</a>
+  <a href="#superapp-install"><span class="n">09</span> Install SuperApp</a>
+  <a href="#superapp-nav"><span class="n">09b</span> SuperApp Navigation</a>
+  <a href="#documents"><span class="n">10</span> Document Testing</a>
+  <a href="#settings"><span class="n">11</span> Settings</a>
+  <a href="#demo"><span class="n">12</span> Demo Mode</a>
+</nav>
+
+<main id="main">
+
+<!-- ════════════════════════════════════════
+     01 — OVERVIEW
+═════════════════════════════════════════ -->
+<div class="sec" id="overview">
+  <div class="sec-hd"><div class="sn b">01</div><h2>Overview</h2></div>
+
+  <p>The <strong>Wallet Console</strong> is the single operational interface for the Param platform. It talks to <strong>Wallet Backend</strong> (platform ops, reads, SuperApp install, users, orgs, RBAC) and <strong>ParamGateway</strong> (on-chain writes only — SM definition, Schema definition, document create, document transitions). SyncFactory writes to the database when initiated by ParamGateway — the console never writes directly to MongoDB.</p>
+
+  <p><strong>Data flow:</strong> Definitions (SM + Schema via ParamGateway · SuperApp + RBAC via Wallet Backend) → Workspace create → SuperApp install → Documents (list via Wallet Backend · create/transition via ParamGateway). All on-chain writes go through ParamGateway → gPRM/NATS → SyncFactory.</p>
+
+  <div class="note i">
+    <div class="ni">📌</div>
+    <div><div class="nt">Backend Architecture Alignment</div>
+    <p><strong>Wallet Backend</strong>: workspace, SuperApp install, org/user/RBAC, profile, documents (read only). <strong>ParamGateway</strong>: SM definition, Schema definition, document create, document transitions — nothing else. The console does not expose pipeline management or DLQ UI. SyncFactory: writes onchain/offchain definitions and documents when triggered by ParamGateway.</p></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     02 — USER JOURNEY MAP
+═════════════════════════════════════════ -->
+<div class="sec" id="journey">
+  <div class="sec-hd"><div class="sn t">02</div><h2>User Journey Map</h2></div>
+
+  <p>The console experience follows this flow. Each step corresponds to a screen or panel the user sees.</p>
+
+  <div class="flow-step"><div class="flow-num">1</div><div class="flow-txt"><strong>Login</strong> — OTP or SSO (Google). No password. Auth via Wallet Backend Auth Gate.</div></div>
+  <div class="flow-step"><div class="flow-num">2</div><div class="flow-txt"><strong>Post-Login</strong> — <code>GET /profile</code>. Two paths displayed: Workspaces (select/create) and Definitions (param_definitions). User chooses one.</div></div>
+  <div class="flow-step"><div class="flow-num">3</div><div class="flow-txt"><strong>Definitions</strong> — (Param Admin) Create onchain/offchain SM & schema via ParamGateway define pipelines. Create SuperApp + RBAC via Wallet Backend. All in <code>param_definitions</code>.</div></div>
+  <div class="flow-step"><div class="flow-num">4</div><div class="flow-txt"><strong>Create Workspace</strong> — <code>POST /workspace/create</code> with subdomain, workspaceName, exchangeParamId.</div></div>
+  <div class="flow-step"><div class="flow-num">5</div><div class="flow-txt"><strong>Install SuperApp</strong> — Pick from definitions, <code>POST /superapp/install</code>. RBAC copied into workspace.</div></div>
+  <div class="flow-step"><div class="flow-num">6</div><div class="flow-txt"><strong>Document Testing</strong> — List docs (Wallet Backend), create/transition (ParamGateway). Schema-driven forms, RBAC-filtered.</div></div>
+  <div class="flow-step"><div class="flow-num">7</div><div class="flow-txt"><strong>Settings</strong> — Profile, Users, RBAC, Orgs, Plants, Master Data. All Wallet Backend APIs.</div></div>
+  <div class="flow-step"><div class="flow-num">8</div><div class="flow-txt"><strong>Demo Mode</strong> — Impersonate any role to test end-user experience without separate login.</div></div>
+</div>
+
+<!-- ════════════════════════════════════════
+     03 — LOGIN
+═════════════════════════════════════════ -->
+<div class="sec" id="login">
+  <div class="sec-hd"><div class="sn a">03</div><h2>Login</h2></div>
+
+  <p>Minimal login screen. Auth via Wallet Backend Auth Gate — OTP or SSO (Google). No password.</p>
+
+  <div class="ux-caption">User sees</div>
+  <div class="mockup" style="max-width:420px;margin:20px auto;">
+    <div class="mock-chrome">
+      <div class="mc-dot" style="background:#f85149"></div>
+      <div class="mc-dot" style="background:#d29922"></div>
+      <div class="mc-dot" style="background:#3fb950"></div>
+      <span class="mc-url">console.param.network</span>
+    </div>
+    <div style="padding:48px 40px;text-align:center;">
+      <div style="font-size:36px;margin-bottom:12px;color:var(--acc);">⬡</div>
+      <div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:6px;">Wallet Console</div>
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:32px;">Param Platform Operations</div>
+      <div style="text-align:left;">
+        <div class="m-fgrp"><div class="m-flbl">Email</div><div class="m-finp" style="display:block;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="29484d4440476959485b484407474c5d5e465b42">[email&#160;protected]</a></div></div>
+        <div style="margin-top:14px;display:flex;gap:10px;">
+          <span class="c-btn" style="flex:1;text-align:center;padding:10px;">Request OTP</span>
+          <span class="c-btn" style="flex:1;text-align:center;padding:10px;background:var(--surf3);border-color:var(--bdr);">Sign in with Google</span>
+        </div>
+        <div class="m-fgrp" style="margin-top:18px;"><div class="m-flbl">OTP (6 digits)</div><div class="m-finp" style="display:block;">••••••</div></div>
+        <div style="margin-top:20px;background:var(--acc);color:#fff;border-radius:10px;padding:12px;text-align:center;font-size:14px;font-weight:700;border:none;">Verify & Sign In →</div>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:20px;">Internal use only. All actions logged.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     04 — POST-LOGIN & WORKSPACE SELECT
+═════════════════════════════════════════ -->
+<div class="sec" id="post-login">
+  <div class="sec-hd"><div class="sn p">04</div><h2>Post-Login</h2></div>
+
+  <p>After login: <code>GET /profile</code> returns <code>{ user, org }</code>. The post-login screen shows <strong>two paths</strong>: <strong>Workspaces</strong> (select or create) and <strong>Definitions</strong> (param_definitions). Both are displayed side by side — user chooses workspace or Definitions.</p>
+
+  <div class="ux-caption">Post-login — Workspaces + Definitions (user has workspaces)</div>
+  <div class="mockup" style="max-width:720px;">
+    <div class="mock-chrome"><span class="mc-url">console.param.network</span></div>
+    <div style="padding:36px 40px;">
+      <div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:6px;">Welcome, SCM Team Lead</div>
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:28px;">Choose a workspace or manage param definitions</div>
+      <div class="pl-grid">
+        <div class="pl-card">
+          <div class="pl-card-icon" style="background:rgba(88,166,255,.15);">📦</div>
+          <div class="pl-card-title">Workspaces</div>
+          <div class="pl-card-desc">Select a workspace to work with SuperApps and documents.</div>
+          <div class="pl-ws-item sel">
+            <div><div class="name">bosch-exim</div><div class="meta">Bosch EXIM · 3 SuperApps</div></div>
+            <span class="arr">→</span>
+          </div>
+          <div class="pl-ws-item">
+            <div><div class="name">grasim-in</div><div class="meta">Grasim Import · 2 SuperApps</div></div>
+            <span class="arr">→</span>
+          </div>
+          <span class="c-btn" style="width:100%;text-align:center;display:block;margin-top:14px;">+ Create Workspace</span>
+        </div>
+        <div class="pl-card def">
+          <span class="pl-card-badge">Param Definitions</span>
+          <div class="pl-card-icon">◇</div>
+          <div class="pl-card-title">Definitions</div>
+          <div class="pl-card-desc">Create SM, schema, SuperApp, and RBAC. param_definitions — no workspace required.</div>
+          <span class="c-btn" style="width:100%;text-align:center;display:block;background:rgba(163,113,247,.2);border-color:rgba(163,113,247,.4);color:var(--a5);padding:10px;">Open Definitions →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ux-caption">Post-login — Workspaces + Definitions (user has no workspaces)</div>
+  <div class="mockup" style="max-width:720px;">
+    <div class="mock-chrome"><span class="mc-url">console.param.network</span></div>
+    <div style="padding:36px 40px;">
+      <div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:6px;">Welcome, SCM Team Lead</div>
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:28px;">Get started by creating a workspace or managing definitions</div>
+      <div class="pl-grid">
+        <div class="pl-card">
+          <div class="pl-card-icon" style="background:rgba(88,166,255,.15);">📦</div>
+          <div class="pl-card-title">Create Workspace</div>
+          <div class="pl-card-desc">Workspaces host SuperApps and documents. Create one to get started.</div>
+          <span class="c-btn" style="width:100%;text-align:center;display:block;padding:12px;">Create Workspace →</span>
+        </div>
+        <div class="pl-card def">
+          <span class="pl-card-badge">Param Definitions</span>
+          <div class="pl-card-icon">◇</div>
+          <div class="pl-card-title">Definitions</div>
+          <div class="pl-card-desc">Create SM, schema, SuperApp, and RBAC first. param_definitions — no workspace required.</div>
+          <span class="c-btn" style="width:100%;text-align:center;display:block;background:rgba(163,113,247,.2);border-color:rgba(163,113,247,.4);color:var(--a5);padding:12px;">Open Definitions →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     05 — DEFINITIONS HUB
+═════════════════════════════════════════ -->
+<div class="sec" id="definitions">
+  <div class="sec-hd"><div class="sn r">05</div><h2>Definitions Hub</h2></div>
+
+  <p>Definitions live in <code>param_definitions</code> (global). Created <strong>outside</strong> workspace — no workspace context. Onchain/offchain SM and schema via ParamGateway define pipelines; SuperApp and RBAC via Wallet Backend.</p>
+
+  <p><strong>All definition types support Create, View, Edit.</strong> Left nav switches context (Onchain SM, Onchain Schema, Offchain SM, Offchain Schema, SuperApps). Toolbar shows <code>+ Create &lt;type&gt;</code>; center lists definitions; right panel shows selected detail with View JSON / Edit actions.</p>
+
+  <div class="ux-caption">Definitions screen — param_definitions, no workspace switcher</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">Definitions — param_definitions</span></div>
+    <div class="m-topbar">
+      <div class="m-tl"><span class="m-brand">⬡ Wallet Console</span><span style="font-size:12px;color:var(--tx3);">·</span><span style="font-size:12px;font-weight:600;color:var(--tx);">Definitions</span></div>
+      <div class="m-tr"><span class="b amber">Param Admin</span><span style="font-size:12px;color:var(--tx3);">⚙️</span></div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp">Definitions</div>
+        <div class="nit a">📋 Onchain SM</div>
+        <div class="nit sub">↳ 4 definitions</div>
+        <div class="nit">📋 Onchain Schema</div>
+        <div class="nit">📋 Offchain SM</div>
+        <div class="nit">📋 Offchain Schema</div>
+        <div class="nit">🚀 SuperApps</div>
+        <div class="nit sub">↳ 2 blueprints</div>
+        <div class="nit">🛡 Team RBAC Matrix</div>
+        <div class="nit sub">↳ 3 matrices</div>
+      </div>
+      <div class="m-center">
+        <div class="c-toolbar">
+          <span class="c-btn">+ Create Onchain SM</span>
+          <span class="c-btn" style="opacity:.7;">+ Onchain Schema</span>
+          <span class="c-btn" style="opacity:.7;">+ Offchain SM</span>
+          <span class="c-btn" style="opacity:.7;">+ Offchain Schema</span>
+          <input class="c-search" placeholder="🔍 Search definitions…" readonly/>
+        </div>
+        <table class="dt">
+          <thead><tr><th>SM ID</th><th>Name</th><th>Type</th><th>States</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><code>public:0xe1ec…</code></td><td><strong>Shipment Booking</strong></td><td><span class="b blue">@sm/Commerce</span></td><td>Contract, Booking, Cancelled</td></tr>
+            <tr><td><code>public:0x94a7…</code></td><td>Catalogue</td><td><span class="b blue">@sm/Catalogue</span></td><td>Item, Approved</td></tr>
+            <tr><td><code>public:0x52a6…</code></td><td>Invoice Flow</td><td><span class="b blue">@sm/Commerce</span></td><td>Draft, Submitted, Paid</td></tr>
+          </tbody>
+        </table>
+        <div class="ux-caption" style="margin-top:14px;">SM/Schema: Create via ParamGateway define pipelines. Onchain Schema / Offchain SM / Offchain Schema: same pattern — list + View JSON + Edit per type.</div>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Selected</div>
+        <div class="det-val">Shipment Booking</div>
+        <div class="det-lbl">SM ID</div>
+        <div class="det-val det-sm"><code>public:0xe1ec34e6…</code></div>
+        <div class="det-lbl">Roles (L1)</div>
+        <div class="det-val det-sm">Consignee, FF, CHA</div>
+        <div class="det-lbl">Start State</div>
+        <div class="det-val det-sm">Contract</div>
+        <hr class="det-divider"/>
+        <div class="det-actions">
+          <span class="c-btn">View JSON</span>
+          <span class="c-btn">Edit</span>
+          <span class="c-btn">Use in SuperApp</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     06 — SUPERAPP & RBAC DEFINITION
+═════════════════════════════════════════ -->
+<div class="sec" id="superapp-define">
+  <div class="sec-hd"><div class="sn p">06</div><h2>SuperApp & RBAC Definition</h2></div>
+
+  <p>Create SuperApp blueprint via <code>POST /definitions/superapps</code>. Configure RBAC per linked SM via <code>POST /definitions/team-rbac-matrix</code>. Wallet Backend writes directly to <code>param_definitions</code>. <strong>SuperApp: Create, View, Edit.</strong> List blueprints; select to view detail; Edit opens same form pre-filled.</p>
+
+  <div class="ux-caption">SuperApp list (View) — select to view detail, Edit to modify</div>
+  <div class="mockup" style="max-width:640px;">
+    <div class="mock-chrome"><span class="mc-url">SuperApp Definitions</span></div>
+    <div style="padding:20px;">
+      <div class="c-toolbar">
+        <span class="c-btn">+ Create SuperApp</span>
+        <input class="c-search" placeholder="🔍 Search…" readonly/>
+      </div>
+      <table class="dt">
+        <thead><tr><th>Name</th><th>Linked SMs</th><th>Sponsor</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td><strong>Bosch EXIM Import</strong></td><td>Shipment Booking, Catalogue</td><td>Consignee</td><td><span class="c-btn">View</span><span class="c-btn">Edit</span></td></tr>
+          <tr><td>Invoice Workflow</td><td>Invoice SM</td><td>Buyer</td><td><span class="c-btn">View</span><span class="c-btn">Edit</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ux-caption">Create SuperApp form (Edit reuses same form, pre-filled)</div>
+  <div class="mockup" style="max-width:640px;">
+    <div class="mock-chrome"><span class="mc-url">Create SuperApp Definition</span></div>
+    <div style="padding:24px;">
+      <div class="m-frow">
+        <div class="m-fgrp"><div class="m-flbl">Name</div><div class="m-finp">Bosch EXIM Import</div></div>
+        <div class="m-fgrp"><div class="m-flbl">Sponsor Role</div><div class="m-finp" style="color:var(--tx3);">Consignee ▾</div></div>
+      </div>
+      <div class="m-fgrp"><div class="m-flbl">Linked SMs</div><div class="m-finp" style="color:var(--tx3);">Shipment Booking, Catalogue ▾ (from onchain_sm_definitions)</div></div>
+      <div class="m-fgrp"><div class="m-flbl">Roles & Teams</div><div class="m-finp det-sm">Consignee: Admin, OSD4, Planners, Viewer · FF: FF · CHA: CHA</div></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+        <span class="c-btn" style="background:transparent;border-color:var(--bdr);">Cancel</span>
+        <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">Create SuperApp →</span>
+      </div>
+    </div>
+  </div>
+
+  <p><strong>RBAC: Create, View, Edit.</strong> List RBAC matrices per SM; select to view; Edit opens matrix table for changes.</p>
+
+  <div class="ux-caption">RBAC list (View) — select SM to view or edit matrix</div>
+  <div class="mockup" style="max-width:560px;">
+    <div class="mock-chrome"><span class="mc-url">RBAC Definitions</span></div>
+    <div style="padding:20px;">
+      <div class="c-toolbar">
+        <span class="c-btn">+ Create RBAC Matrix</span>
+        <input class="c-search" placeholder="🔍 Search…" readonly/>
+      </div>
+      <table class="dt">
+        <thead><tr><th>SM</th><th>Roles</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td><strong>Shipment Booking</strong></td><td>Consignee, FF, CHA</td><td><span class="c-btn">View</span><span class="c-btn">Edit</span></td></tr>
+          <tr><td>Catalogue</td><td>Consignee, FF</td><td><span class="c-btn">View</span><span class="c-btn">Edit</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ux-caption">Configure RBAC matrix (Create/Edit — same form)</div>
+  <div class="mockup" style="max-width:720px;">
+    <div class="mock-chrome"><span class="mc-url">RBAC Matrix — Shipment Booking</span></div>
+    <div style="padding:20px;overflow-x:auto;">
+      <table class="dt">
+        <thead><tr><th>State</th><th>Consignee.Admin</th><th>Consignee.OSD4</th><th>Consignee.Planners</th><th>FF.FF</th><th>CHA.CHA</th></tr></thead>
+        <tbody>
+          <tr><td>Contract</td><td><span class="b grn">RW</span></td><td><span class="b grn">RW</span></td><td><span class="b teal">RO</span></td><td><span class="b grn">RW</span></td><td><span class="b red">N/A</span></td></tr>
+          <tr><td>Booking</td><td><span class="b grn">RW</span></td><td><span class="b grn">RW</span></td><td><span class="b teal">RO</span></td><td><span class="b grn">RW</span></td><td><span class="b red">N/A</span></td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:12px;color:var(--tx3);margin-top:12px;">RW = read+write · RO = read-only · N/A = hidden</div>
+      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+        <span class="c-btn" style="background:transparent;border-color:var(--bdr);">Cancel</span>
+        <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">Save Matrix</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+</div>
+
+
+<!-- ════════════════════════════════════════
+     06b — TEAM RBAC MATRIX (DEFINITIONS)
+═════════════════════════════════════════ -->
+<div class="sec" id="rbac-matrix-def">
+  <div class="sec-hd"><div class="sn p">06b</div><h2>Team RBAC Matrix</h2></div>
+
+  <p>Accessed from the <strong>Definitions sidebar — under SuperApp Definitions</strong>. The RBAC Matrix defines per-role-team, per-state permissions for each SM linked in a SuperApp. Created via <code>POST /definitions/team-rbac-matrix</code> (Wallet Backend). <strong>One matrix per linked SM, required before SuperApp install.</strong> Supports Create, View, and Edit — Edit reopens the same matrix form pre-filled.</p>
+
+  <h3>Team RBAC Matrix — Deployment</h3>
+  <p>The Team RBAC Matrix is <strong>required before any SuperApp can be installed</strong>. It is created via <code>POST /definitions/team-rbac-matrix</code> (Wallet Backend). One matrix call per linked SM — if a SuperApp has 2 SMs, submit 2 matrix calls. The console auto-parses roles and states from the selected SM definition and generates the grid. Each cell is <code>RW</code> / <code>RO</code> / <code>N/A</code> per <code>Role.Team × State</code> combination.</p>
+
+  <div class="note i">
+    <div class="ni">📌</div>
+    <div><div class="nt">access key format: "Role.Team"</div>
+    <p>Each column header in the matrix is <code>RoleName.TeamName</code> — e.g. <code>Consignee.Admin</code>, <code>Consignee.Planners</code>, <code>FF.FF</code>, <code>CHA.CHA</code>. Every role-team pair from the SuperApp definition must have a column. SubState and MicroState rows are indented — they inherit read from the parent state but control write independently.</p></div>
+  </div>
+
+  <div class="ux-caption">Configure Team RBAC Matrix — per SM (Create / Edit reuses same form)</div>
+  <div class="mockup" style="max-width:760px;">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">Team RBAC Matrix — Shipment Booking</span></div>
+    <div style="padding:20px;">
+
+      <!-- SM tab switcher -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <div style="font-size:11.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;">SM</div>
+        <div style="display:flex;gap:6px;">
+          <span style="font-size:11.5px;font-weight:700;padding:4px 12px;background:var(--acc);color:#fff;border-radius:5px;cursor:pointer;">Shipment Booking</span>
+          <span style="font-size:11.5px;padding:4px 12px;background:var(--surf2);color:var(--tx3);border:1px solid var(--bdr);border-radius:5px;cursor:pointer;">Sales Invoice</span>
+        </div>
+        <div style="font-size:11px;color:var(--tx3);margin-left:auto;">One matrix per linked SM — configure each tab</div>
+      </div>
+
+      <!-- Matrix table -->
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--bdr);">
+              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.6px;min-width:150px;">State · Level</th>
+              <th style="text-align:center;padding:8px 8px;font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;">Consignee<br/>Admin</th>
+              <th style="text-align:center;padding:8px 8px;font-size:10px;font-weight:700;color:var(--acc);text-transform:uppercase;letter-spacing:.5px;">Consignee<br/>Planners</th>
+              <th style="text-align:center;padding:8px 8px;font-size:10px;font-weight:700;color:var(--a5);text-transform:uppercase;letter-spacing:.5px;">FF<br/>FF</th>
+              <th style="text-align:center;padding:8px 8px;font-size:10px;font-weight:700;color:var(--a3);text-transform:uppercase;letter-spacing:.5px;">CHA<br/>CHA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- State row -->
+            <tr style="border-bottom:1px solid var(--bdr);background:color-mix(in srgb,var(--surf2) 60%,transparent);">
+              <td style="padding:7px 10px;font-size:11.5px;font-weight:700;color:var(--tx);">Contract</td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a4) 10%,var(--surf3));color:var(--a4);border:1px solid color-mix(in srgb,var(--a4) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>N/A</option><option>RW</option><option>RO</option></select></td>
+            </tr>
+            <!-- SubState row -->
+            <tr style="border-bottom:1px solid var(--bdr);">
+              <td style="padding:6px 10px 6px 24px;font-size:11px;color:var(--tx2);">↳ Booking</td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a3) 10%,var(--surf3));color:var(--a3);border:1px solid color-mix(in srgb,var(--a3) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>N/A</option><option>RW</option><option>RO</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a4) 10%,var(--surf3));color:var(--a4);border:1px solid color-mix(in srgb,var(--a4) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>N/A</option><option>RW</option><option>RO</option></select></td>
+            </tr>
+            <!-- SubState row 2 -->
+            <tr style="border-bottom:1px solid var(--bdr);">
+              <td style="padding:6px 10px 6px 24px;font-size:11px;color:var(--tx2);">↳ Cancelled</td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:5px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a4) 10%,var(--surf3));color:var(--a4);border:1px solid color-mix(in srgb,var(--a4) 25%,transparent);border-radius:4px;padding:2px 5px;font-weight:700;"><option>N/A</option><option>RW</option><option>RO</option></select></td>
+            </tr>
+            <!-- Next state -->
+            <tr style="border-bottom:1px solid var(--bdr);background:color-mix(in srgb,var(--surf2) 60%,transparent);">
+              <td style="padding:7px 10px;font-size:11.5px;font-weight:700;color:var(--tx);">Shipment</td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+            </tr>
+            <tr>
+              <td style="padding:7px 10px;font-size:11.5px;font-weight:700;color:var(--tx);">Payment</td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a3) 10%,var(--surf3));color:var(--a3);border:1px solid color-mix(in srgb,var(--a3) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>N/A</option><option>RW</option><option>RO</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--acc) 12%,var(--surf3));color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RO</option><option>RW</option><option>N/A</option></select></td>
+              <td style="text-align:center;padding:6px 4px;"><select style="font-size:11px;background:color-mix(in srgb,var(--a2) 12%,var(--surf3));color:var(--a2);border:1px solid color-mix(in srgb,var(--a2) 25%,transparent);border-radius:4px;padding:3px 6px;font-weight:700;"><option>RW</option><option>RO</option><option>N/A</option></select></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Legend + actions -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;padding:2px 8px;background:color-mix(in srgb,var(--a2) 14%,transparent);color:var(--a2);border-radius:4px;font-weight:700;">RW</span>
+          <span style="font-size:11px;color:var(--tx3);">Read + Write</span>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;padding:2px 8px;background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc);border-radius:4px;font-weight:700;">RO</span>
+          <span style="font-size:11px;color:var(--tx3);">Read only</span>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;padding:2px 8px;background:color-mix(in srgb,var(--a4) 10%,transparent);color:var(--a4);border-radius:4px;font-weight:700;">N/A</span>
+          <span style="font-size:11px;color:var(--tx3);">Hidden</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <span class="c-btn" style="background:transparent;border-color:var(--bdr);">Cancel</span>
+          <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">Save Matrix →</span>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px 13px;background:var(--surf2);border:1px solid var(--bdr);border-radius:7px;font-size:12px;color:var(--tx3);">
+        <strong style="color:var(--tx2);">SubState rows (↳)</strong> inherit read from parent state. They only independently control write access. Every state, subState, and microState defined in the SM must have a row — no gaps allowed. Most-specific match wins at runtime: microState &gt; subState &gt; state.
+      </div>
+    </div>
+  </div>
+
+  <div class="note w">
+    <div class="ni">⚠️</div>
+    <div><div class="nt">Required before install</div>
+    <p>A SuperApp cannot be installed into a workspace until its Team RBAC Matrix has been saved for <em>every</em> linked SM. The Install button on the SuperApp definition is disabled until all matrices are present. Once installed, the workspace gets its own copy of the matrix that can be customised post-install from Settings → RBAC.</p></div>
+  
+</div>
+
+<!-- ════════════════════════════════════════
+     07 — SHELL & NAVIGATION
+═════════════════════════════════════════ -->
+<div class="sec" id="shell">
+  <div class="sec-hd"><div class="sn b">07</div><h2>Shell & Navigation</h2></div>
+
+  <p>Fixed 3-panel layout. <strong>Top bar (right side)</strong> contains three items: <strong>◇ Definitions</strong> pill (navigates to param_definitions, outside workspace context), <strong>workspace switcher</strong> dropdown (shows active workspace + ▾; clicking opens a popover listing all workspaces + "+ Create Workspace"), and a <strong>single role badge</strong>. Only one role is ever shown — the logged-in user's real role when operating normally (e.g. <code>Admin ▾</code>), or the impersonated demo role when Demo Mode is active (e.g. <code>🎭 Buyer</code>). Never both at the same time. Left nav: contextual — shows SuperApp document types when inside an app. Center: main content. Right: detail inspector.</p>
+
+  <div class="note i">
+    <div class="ni">👤</div>
+    <div><div class="nt">Single role in top bar — always</div>
+    <p>Normal session: shows the user's real role (e.g. <code>Admin ▾</code>). Demo Mode active: shows the demo role with 🎭 prefix (e.g. <code>🎭 Buyer</code>). The ▾ on the real role opens a role-switcher if the user has multiple roles. There is no situation where both a real role badge and a demo badge appear simultaneously.</p></div>
+  </div>
+
+  <div class="ux-caption">Main shell — workspace context (bosch-exim) · logged in as Admin (no demo active)</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">console.param.network</span></div>
+    <div class="m-topbar">
+      <div class="m-tl"><span class="m-brand">⬡ Wallet Console</span></div>
+      <div class="m-tr"><a href="#definitions" style="font-size:12px;font-weight:600;color:var(--a5);padding:5px 11px;border-radius:8px;background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);cursor:pointer;text-decoration:none;">◇ Definitions</a><span class="m-ws-switcher">bosch-exim ▾</span><span class="b blue">Admin ▾</span><span style="font-size:12px;color:var(--tx3);">⚙️</span></div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp">Workspace</div>
+        <div class="nit a">🚀 SuperApps</div>
+        <div class="ngrp">Active: Bosch-Invoice</div>
+        <div class="nit sub">📄 Invoice</div>
+        <div class="nit sub">🛃 Customs</div>
+        <div class="nit sub">💳 Payment</div>
+        <div class="nit sub">✅ Completed</div>
+        <div class="ngrp">Tools</div>
+        <div class="nit">📐 Templates</div>
+        <div class="nit">⚙️ Settings</div>
+      </div>
+      <div class="m-center">
+        <div class="kpi-strip">
+          <div class="kpi"><div class="kpi-v" style="color:var(--a2)">3</div><div class="kpi-l">SuperApps</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--a3)">142</div><div class="kpi-l">Documents</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--grn)">140</div><div class="kpi-l">Synced</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--acc)">4</div><div class="kpi-l">States Active</div></div>
+        </div>
+        <table class="dt">
+          <thead><tr><th>SuperApp</th><th>SM</th><th>Documents</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><strong>🚀 Bosch-Invoice</strong></td><td>Invoice Flow</td><td>87</td><td><span class="b grn">Active</span></td></tr>
+            <tr><td>🚀 CHA Import</td><td>Shipment Booking</td><td>31</td><td><span class="b grn">Active</span></td></tr>
+            <tr><td>🚀 PO Workflow</td><td>Commerce SM</td><td>24</td><td><span class="b amber">Partial</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Active Workspace</div>
+        <div class="det-val">bosch-exim</div>
+        <div class="det-lbl">Selected App</div>
+        <div class="det-val">Bosch-Invoice</div>
+        <div class="det-lbl">SM</div>
+        <div class="det-val det-sm">Invoice Flow · v5.0</div>
+        <div class="det-lbl">Documents</div>
+        <div class="det-val det-sm">87 total · 85 synced</div>
+        <hr class="det-divider"/>
+        <div class="det-actions">
+          <span class="c-btn">+ Install SuperApp</span>
+          <span class="c-btn grn">🎭 Demo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     08 — CREATE WORKSPACE
+═════════════════════════════════════════ -->
+<div class="sec" id="workspace-create">
+  <div class="sec-hd"><div class="sn t">08</div><h2>Create Workspace</h2></div>
+
+  <p><code>POST /workspace/create</code> with <code>subdomain</code>, <code>workspaceName</code>, <code>exchangeParamId</code>. Caller becomes first workspace admin.</p>
+
+  <div class="ux-caption">Create workspace form</div>
+  <div class="mockup" style="max-width:480px;">
+    <div class="mock-chrome"><span class="mc-url">Create Workspace</span></div>
+    <div style="padding:28px;">
+      <div class="m-fgrp"><div class="m-flbl">Subdomain</div><div class="m-finp">bosch-exim</div></div>
+      <div class="m-fgrp"><div class="m-flbl">Workspace Name</div><div class="m-finp">Bosch Export-Import Platform</div></div>
+      <div class="m-fgrp"><div class="m-flbl">Exchange Param ID</div><div class="m-finp" style="color:var(--tx3);">0x5e282dE1… ▾</div></div>
+      <div style="margin-top:24px;background:var(--acc);color:#fff;border-radius:10px;padding:12px;text-align:center;font-size:14px;font-weight:700;border:none;cursor:pointer;">Create Workspace →</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     09 — INSTALL SUPERAPP
+═════════════════════════════════════════ -->
+<div class="sec" id="superapp-install">
+  <div class="sec-hd"><div class="sn p">09</div><h2>Install SuperApp</h2></div>
+
+  <p>Pick from <code>param_definitions.superapp_definitions</code>. <code>POST /superapp/install</code> copies RBAC into workspace SuperApp DB.</p>
+
+  <div class="ux-caption">Install SuperApp — pick from definitions</div>
+  <div class="mockup" style="max-width:560px;">
+    <div class="mock-chrome"><span class="mc-url">Install SuperApp — bosch-exim</span></div>
+    <div style="padding:24px;">
+      <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:16px;">Available SuperApps</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:14px 18px;border:2px solid var(--acc);border-radius:10px;background:rgba(88,166,255,.08);display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-size:14px;font-weight:700;color:var(--acc);">Bosch EXIM Import</div><div style="font-size:12px;color:var(--tx3);">Shipment Booking, Catalogue · Consignee, FF, CHA</div></div>
+          <span class="c-btn">Install</span>
+        </div>
+        <div style="padding:14px 18px;border:1px solid var(--bdr);border-radius:10px;background:var(--surf2);display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-size:14px;font-weight:600;color:var(--tx);">Invoice Workflow</div><div style="font-size:12px;color:var(--tx3);">Invoice SM · Buyer, Seller</div></div>
+          <span class="c-btn">Install</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     09b — SUPERAPP NAVIGATION
+═════════════════════════════════════════ -->
+<div class="sec" id="superapp-nav">
+  <div class="sec-hd"><div class="sn p">09b</div><h2>SuperApp Navigation — Selecting an App</h2></div>
+
+  <p>After installing SuperApps into a workspace, the user selects one from the SuperApps list. <strong>Once selected, the sidebar changes context</strong> — the SuperApp name becomes the section header and all its document types (apps) are listed as nav items beneath it. This is the primary navigation pattern inside a workspace — no nested menus, no extra pages.</p>
+
+  <div class="note i">
+    <div class="ni">📌</div>
+    <div><div class="nt">Navigation logic</div>
+    <p>SuperApps list (center panel) → click a SuperApp → sidebar updates to show that SuperApp's document types → click a document type → center panel shows documents filtered to that type. The active workspace is always visible in the top-right switcher. Switching workspace resets the SuperApp selection.</p></div>
+  </div>
+
+  <div class="ux-caption">SuperApps list — select to enter app context</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">SuperApps — bosch-exim</span></div>
+    <div class="m-topbar">
+      <div class="m-tl"><span class="m-brand">⬡ Wallet Console</span></div>
+      <div class="m-tr"><a href="#definitions" style="font-size:12px;font-weight:600;color:var(--a5);padding:5px 11px;border-radius:8px;background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);cursor:pointer;text-decoration:none;">◇ Definitions</a><span class="m-ws-switcher">bosch-exim ▾</span><span class="b blue">Admin ▾</span><span style="font-size:12px;color:var(--tx3);">⚙️</span></div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp">Workspace</div>
+        <div class="nit a">🚀 SuperApps</div>
+        <div class="ngrp">Tools</div>
+        <div class="nit">📐 Templates</div>
+        <div class="nit">⚙️ Settings</div>
+      </div>
+      <div class="m-center">
+        <div class="c-toolbar">
+          <span class="c-btn">+ Install SuperApp</span>
+          <input class="c-search" placeholder="🔍 Filter apps…" readonly/>
+        </div>
+        <table class="dt">
+          <thead><tr><th>SuperApp</th><th>SM</th><th>Document Types</th><th>Documents</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><strong>🚀 Bosch-Invoice</strong></td><td>Invoice Flow v5.0</td><td>Invoice · Customs · Payment</td><td>87</td><td><span class="b grn">Active</span></td></tr>
+            <tr><td>🚀 CHA Import</td><td>Shipment Booking</td><td>Shipment · CHA · Completed</td><td>31</td><td><span class="b grn">Active</span></td></tr>
+            <tr><td>🚀 PO Workflow</td><td>Commerce SM</td><td>PO · GRN · Invoice</td><td>24</td><td><span class="b amber">Partial</span></td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:12px;color:var(--tx3);margin-top:10px;">Click a SuperApp to enter its document context → sidebar updates with its document types.</div>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Selected</div>
+        <div class="det-val">Bosch-Invoice</div>
+        <div class="det-lbl">SM</div>
+        <div class="det-val det-sm">Invoice Flow · v5.0</div>
+        <div class="det-lbl">Roles</div>
+        <div class="det-val det-sm">Buyer · Seller · CHA</div>
+        <div class="det-lbl">Document Types</div>
+        <div class="det-val det-sm">Invoice · Customs · Payment · Completed</div>
+        <hr class="det-divider"/>
+        <div class="det-actions">
+          <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">Open App →</span>
+          <span class="c-btn grn">🎭 Demo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ux-caption">Inside SuperApp context — sidebar shows document types, top-bar shows active app</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">Bosch-Invoice — Invoice</span></div>
+    <div class="m-topbar">
+      <div class="m-tl">
+        <span class="m-brand">⬡ Wallet Console</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--a5);">🚀 Bosch-Invoice</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--tx);">Invoice</span>
+      </div>
+      <div class="m-tr">
+        <a href="#definitions" style="font-size:12px;font-weight:600;color:var(--a5);padding:5px 11px;border-radius:8px;background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);cursor:pointer;text-decoration:none;">◇ Definitions</a>
+        <span class="m-ws-switcher">bosch-exim ▾</span>
+        <span class="b blue">Admin ▾</span>
+        <span style="font-size:12px;color:var(--tx3);">⚙️</span>
+      </div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp">Workspace</div>
+        <div class="nit">🚀 SuperApps</div>
+        <div class="ngrp" style="color:var(--a5);">🚀 Bosch-Invoice</div>
+        <div class="nit a">📄 Invoice</div>
+        <div class="nit">🛃 Customs</div>
+        <div class="nit">💳 Payment</div>
+        <div class="nit">✅ Completed</div>
+        <div class="ngrp">Tools</div>
+        <div class="nit">📐 Templates</div>
+        <div class="nit">⚙️ Settings</div>
+      </div>
+      <div class="m-center">
+        <div class="c-toolbar">
+          <span class="c-btn">+ Create Invoice</span>
+          <span class="c-btn">📥 Import</span>
+          <input class="c-search" placeholder="🔍 Search invoices…" readonly/>
+        </div>
+        <table class="dt">
+          <thead><tr><th>Invoice No</th><th>Buyer</th><th>Amount</th><th>State</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><strong>INV-0021</strong></td><td>Bosch DE</td><td>€14,350</td><td><span class="b blue">Invoice</span></td></tr>
+            <tr><td>INV-0020</td><td>Bosch DE</td><td>€8,200</td><td><span class="b blue">Invoice</span></td></tr>
+            <tr><td>INV-0019</td><td>Bosch DE</td><td>€22,100</td><td><span class="b blue">Invoice</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Invoice</div><div class="det-val">INV-0021</div>
+        <div class="det-lbl">State</div><div class="det-val"><span class="b blue">Invoice</span></div>
+        <div class="det-lbl">Buyer</div><div class="det-val det-sm">Bosch DE</div>
+        <div class="det-lbl">Amount</div><div class="det-val">€14,350</div>
+        <hr class="det-divider"/>
+        <div class="det-lbl">Available Actions</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+          <span class="c-btn" style="text-align:center;">Submit to CHA →</span>
+          <span class="c-btn red" style="text-align:center;">Reject ✕</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note s">
+    <div class="ni">✓</div>
+    <div><div class="nt">Navigation rules</div>
+    <p>1. "SuperApps" nav item always goes back to the full SuperApp list for the active workspace.<br/>
+    2. The SuperApp section header in the sidebar (e.g. "🚀 Bosch-Invoice") is the active SuperApp — clicking it also goes back to the list.<br/>
+    3. Each document type item (Invoice, Customs, Payment…) shows documents filtered to that SM state.<br/>
+    4. The breadcrumb in the top bar always shows: Console · SuperApp name · Active doc type.<br/>
+    5. Workspace switcher in top-right — switching workspace collapses the SuperApp sidebar back to just "🚀 SuperApps".</p></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     10 — DOCUMENT TESTING
+═════════════════════════════════════════ -->
+<div class="sec" id="documents">
+  <div class="sec-hd"><div class="sn a">10</div><h2>Document Testing</h2></div>
+
+  <p>Documents are scoped to an <strong>active SuperApp</strong>. Selecting a state from the left sidebar shows documents at that SM state. Each state has <strong>horizontal subtabs for its substates</strong> — selecting a subtab filters the document list to that exact substate. "All" subtab shows all substates combined. List via Wallet Backend <code>GET /documents</code>. Create/transition via <strong>ParamGateway</strong>.</p>
+
+  <div class="note w">
+    <div class="ni">🔀</div>
+    <div><div class="nt">ParamGateway — the console uses it only for these calls</div>
+    <p><strong>(1)</strong> SM definition deploy — <code>POST /pipelines</code> with <code>mnemonic:"define", defType:"statemachine"</code>. <strong>(2)</strong> Schema definition deploy — same, <code>defType:"schema"</code>. <strong>(3)</strong> Document create — <code>POST /pipelines/:id/execute</code> with document payload. <strong>(4)</strong> Document transition — same execute endpoint with <code>_chain.stateTo</code> override per record. No pipeline management UI, no DLQ, no batch list is exposed anywhere in the console.</p></div>
+  </div>
+
+  <p>Example below uses <strong>Shipment Tracker SM</strong> (real SM from param_definitions). Two top-level states: <strong>Orders</strong> (substates: Created, Cancelled) and <strong>Shipment</strong> (substates: PrePickup → Pickup → PreAlert → HSNPending → Submit → InTransit → Arrived → PoD · terminal: Cancelled). The sidebar shows the two states; clicking a state loads the substate tab bar in the center panel.</p>
+
+  <div class="ux-caption">Orders state — "Created" subtab active · documents filtered to Orders:Created</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">Shipment Tracker — Orders</span></div>
+    <div class="m-topbar">
+      <div class="m-tl">
+        <span class="m-brand">⬡ Wallet Console</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--a5);">🚀 Shipment Tracker</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--tx);">Orders</span>
+      </div>
+      <div class="m-tr">
+        <a href="#definitions" style="font-size:12px;font-weight:600;color:var(--a5);padding:5px 11px;border-radius:8px;background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);cursor:pointer;text-decoration:none;">◇ Definitions</a>
+        <span class="m-ws-switcher">bosch-exim ▾</span>
+        <span class="b blue">Admin ▾</span>
+      </div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp" style="color:var(--a5);">🚀 Shipment Tracker</div>
+        <div class="nit a">📦 Orders</div>
+        <div class="nit">🚢 Shipment</div>
+        <div class="ngrp">Tools</div>
+        <div class="nit">⚙️ Settings</div>
+      </div>
+      <div class="m-center">
+        <!-- Substate tab bar -->
+        <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--bdr);margin-bottom:14px;overflow-x:auto;">
+          <div style="padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">All</div>
+          <div style="padding:9px 16px;font-size:12.5px;font-weight:700;color:var(--acc);cursor:pointer;white-space:nowrap;border-bottom:2px solid var(--acc);">Created</div>
+          <div style="padding:9px 16px;font-size:12.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">Cancelled</div>
+        </div>
+        <div class="c-toolbar">
+          <span class="c-btn">+ Create Order</span>
+          <input class="c-search" placeholder="🔍 Search orders…" readonly/>
+        </div>
+        <table class="dt">
+          <thead><tr><th>Order No</th><th>Consignee</th><th>FF</th><th>Substate</th><th>Date</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><strong>ORD-0042</strong></td><td>Bosch Chassis</td><td>K+N</td><td><span class="b teal">Created</span></td><td>14 Feb 2026</td></tr>
+            <tr><td>ORD-0041</td><td>Bosch Chassis</td><td>Rhenus</td><td><span class="b teal">Created</span></td><td>12 Feb 2026</td></tr>
+            <tr><td>ORD-0040</td><td>Bosch Chassis</td><td>K+N</td><td><span class="b teal">Created</span></td><td>10 Feb 2026</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Order</div><div class="det-val">ORD-0042</div>
+        <div class="det-lbl">State</div><div class="det-val"><span class="b blue">Orders</span> · <span class="b teal">Created</span></div>
+        <div class="det-lbl">Consignee</div><div class="det-val det-sm">Bosch Chassis Systems</div>
+        <div class="det-lbl">FF</div><div class="det-val det-sm">K+N Logistics</div>
+        <div class="det-lbl">CHA</div><div class="det-val det-sm">Not assigned</div>
+        <hr class="det-divider"/>
+        <div class="det-lbl">Available Actions</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+          <span class="c-btn" style="text-align:center;">Move to Shipment →</span>
+          <span class="c-btn red" style="text-align:center;">Cancel ✕</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ux-caption">Shipment state — "InTransit" subtab active · all 9 substates shown in tab bar</div>
+  <div class="mockup">
+    <div class="mock-chrome"><div class="mc-dot" style="background:#f85149"></div><div class="mc-dot" style="background:#d29922"></div><div class="mc-dot" style="background:#3fb950"></div><span class="mc-url">Shipment Tracker — Shipment</span></div>
+    <div class="m-topbar">
+      <div class="m-tl">
+        <span class="m-brand">⬡ Wallet Console</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--a5);">🚀 Shipment Tracker</span>
+        <span style="font-size:12px;color:var(--tx3);">·</span>
+        <span style="font-size:12px;font-weight:600;color:var(--tx);">Shipment</span>
+      </div>
+      <div class="m-tr">
+        <a href="#definitions" style="font-size:12px;font-weight:600;color:var(--a5);padding:5px 11px;border-radius:8px;background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.25);cursor:pointer;text-decoration:none;">◇ Definitions</a>
+        <span class="m-ws-switcher">bosch-exim ▾</span>
+        <span class="b blue">Admin ▾</span>
+      </div>
+    </div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp" style="color:var(--a5);">🚀 Shipment Tracker</div>
+        <div class="nit">📦 Orders</div>
+        <div class="nit a">🚢 Shipment</div>
+        <div class="ngrp">Tools</div>
+        <div class="nit">⚙️ Settings</div>
+      </div>
+      <div class="m-center">
+        <!-- Substate tab bar — all 9 substates from Shipment Tracker SM -->
+        <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--bdr);margin-bottom:14px;overflow-x:auto;">
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">All</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">PrePickup</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">Pickup</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">PreAlert</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">HSNPending</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">Submit</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:700;color:var(--acc);cursor:pointer;white-space:nowrap;border-bottom:2px solid var(--acc);">InTransit</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">Arrived</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">PoD</div>
+          <div style="padding:9px 12px;font-size:11.5px;font-weight:600;color:var(--tx3);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;">Cancelled</div>
+        </div>
+        <div class="c-toolbar">
+          <input class="c-search" placeholder="🔍 Search shipments…" readonly/>
+          <span style="font-size:11px;color:var(--tx3);">3 shipments in transit</span>
+        </div>
+        <table class="dt">
+          <thead><tr><th>Shipment No</th><th>Consignee</th><th>FF</th><th>Substate</th><th>ETA</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><strong>SHP-0018</strong></td><td>Bosch Chassis</td><td>K+N</td><td><span class="b blue">InTransit</span></td><td>22 Feb 2026</td></tr>
+            <tr><td>SHP-0017</td><td>Bosch Chassis</td><td>Rhenus</td><td><span class="b blue">InTransit</span></td><td>25 Feb 2026</td></tr>
+            <tr><td>SHP-0016</td><td>Bosch Chassis</td><td>K+N</td><td><span class="b blue">InTransit</span></td><td>28 Feb 2026</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Shipment</div><div class="det-val">SHP-0018</div>
+        <div class="det-lbl">State</div><div class="det-val"><span class="b blue">Shipment</span> · <span class="b blue">InTransit</span></div>
+        <div class="det-lbl">Consignee</div><div class="det-val det-sm">Bosch Chassis Systems</div>
+        <div class="det-lbl">FF</div><div class="det-val det-sm">K+N Logistics</div>
+        <div class="det-lbl">ETA</div><div class="det-val det-sm">22 Feb 2026</div>
+        <hr class="det-divider"/>
+        <div class="det-lbl">Available Actions</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+          <span class="c-btn" style="text-align:center;">Mark Arrived →</span>
+          <span class="c-btn red" style="text-align:center;">Cancel ✕</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note s">
+    <div class="ni">✓</div>
+    <div><div class="nt">Substate tab bar rules</div>
+    <p>1. Substate tabs are generated dynamically from the SM definition fetched via Wallet Backend — never hardcoded.<br/>
+    2. "All" tab is always the first tab and shows all documents regardless of substate.<br/>
+    3. Active tab is highlighted with an underline accent; selected document's detail panel shows both state and substate (e.g. <code>Shipment · InTransit</code>).<br/>
+    4. If a state has no substates, no tab bar is rendered — the document list fills the full center panel.<br/>
+    5. Transition actions in the right panel reflect what the current substate allows — derived from <code>GET /actions</code>.</p></div>
+  </div>
+
+  <div class="ux-caption">Create document — schema-driven form (fields from live Schema)</div>
+  <div class="mockup" style="max-width:520px;">
+    <div class="mock-chrome"><span class="mc-url">Create Order — Orders:Created</span></div>
+    <div style="padding:24px;">
+      <div class="m-fgrp"><div class="m-flbl">Order Number</div><div class="m-finp">ORD-0043</div></div>
+      <div class="m-fgrp"><div class="m-flbl">Consignee</div><div class="m-finp" style="color:var(--tx3);">Bosch Chassis Systems ▾</div></div>
+      <div class="m-fgrp"><div class="m-flbl">Freight Forwarder</div><div class="m-finp" style="color:var(--tx3);">K+N Logistics ▾</div></div>
+      <div class="m-fgrp"><div class="m-flbl">CHA</div><div class="m-finp" style="color:var(--tx3);">Select CHA ▾</div></div>
+      <div style="font-size:11.5px;color:var(--tx3);margin-bottom:16px;padding:8px 12px;background:var(--surf2);border-radius:7px;border:1px solid var(--bdr);">Fields loaded from Schema <code>public:0x76cc18de…</code> via <code>GET /definitions/schemas/:id</code></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <span class="c-btn" style="background:transparent;border-color:var(--bdr);">Cancel</span>
+        <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">Create via ParamGateway →</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     11 — SETTINGS
+═════════════════════════════════════════ -->
+<div class="sec" id="settings">
+  <div class="sec-hd"><div class="sn t">11</div><h2>Settings</h2></div>
+
+  <p>Profile, Users, RBAC, Orgs, Plants, Master Data. All Wallet Backend APIs. Scoped to active workspace + SuperApp where applicable.</p>
+
+  <div class="ux-caption">Settings — tabs</div>
+  <div class="mockup">
+    <div class="mock-chrome"><span class="mc-url">Settings — bosch-exim</span></div>
+    <div class="m-body">
+      <div class="m-left">
+        <div class="ngrp">Settings</div>
+        <div class="nit a sub">👤 Profile</div>
+        <div class="nit sub">👥 Users</div>
+        <div class="nit sub">🛡 RBAC</div>
+        <div class="nit sub">🏢 Orgs</div>
+        <div class="nit sub">🏭 Plants</div>
+        <div class="nit sub">🗄 Master Data</div>
+      </div>
+      <div class="m-center">
+        <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:12px;">Profile</div>
+        <div class="m-fgrp"><div class="m-flbl">Name</div><div class="m-finp">SCM Team Lead</div></div>
+        <div class="m-fgrp"><div class="m-flbl">Email</div><div class="m-finp det-sm"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a5c4c1c8cccbe5d5c4d7c4c88bcbc0d1d2cad7ce">[email&#160;protected]</a></div></div>
+        <div class="m-fgrp"><div class="m-flbl">Org (from GET /profile)</div><div class="m-finp det-sm">Bosch Chassis Systems · Consignee</div></div>
+        <span class="c-btn" style="margin-top:12px;">Save</span>
+      </div>
+      <div class="m-right">
+        <div class="det-lbl">Workspace</div>
+        <div class="det-val">bosch-exim</div>
+        <div class="det-lbl">SuperApp</div>
+        <div class="det-val det-sm">Bosch-Invoice (for Users/RBAC/Orgs)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     12 — DEMO MODE
+═════════════════════════════════════════ -->
+<div class="sec" id="demo">
+  <div class="sec-hd"><div class="sn p">12</div><h2>Demo Mode</h2></div>
+
+  <p>Impersonate any role. UI re-evaluates permissions through selected role — nav, actions, visibility update. No separate login.</p>
+
+  <div class="ux-caption">Role picker</div>
+  <div class="mockup" style="max-width:480px;">
+    <div class="mock-chrome"><span class="mc-url">Demo as Role</span></div>
+    <div style="padding:24px;">
+      <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:4px;">Select Role</div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:18px;">Bosch-Invoice</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="padding:12px 16px;border:2px solid var(--acc);border-radius:8px;background:rgba(88,166,255,.1);display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-size:13px;font-weight:700;color:var(--acc);">Buyer</div><div style="font-size:11px;color:var(--tx3);">Can create and submit invoices</div></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:var(--acc);"></div>
+        </div>
+        <div style="padding:12px 16px;border:1px solid var(--bdr);border-radius:8px;background:var(--surf2);display:flex;justify-content:space-between;align-items:center;">
+          <div><div style="font-size:13px;font-weight:600;color:var(--tx);">Seller</div><div style="font-size:11px;color:var(--tx3);">Can acknowledge and process</div></div>
+        </div>
+      </div>
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+        <span class="c-btn" style="background:transparent;border-color:var(--bdr);">Cancel</span>
+        <span class="c-btn" style="background:var(--acc);color:#fff;border-color:var(--acc);">🎭 Start Demo as Buyer</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="margin-top:56px;padding:24px 28px;background:var(--surf2);border:1px solid var(--bdr);border-radius:12px;font-size:13px;color:var(--tx3);line-height:1.8;">
+  <strong style="color:var(--tx);">Wallet Console · Spec v5.0</strong><br/>
+  Updated architecture: Definitions hub with RBAC Matrix, workspace switcher in top-bar, SuperApp-scoped sidebar navigation, ParamGateway used only for SM/Schema/Document API calls. Dark theme.
+</div>
+
+</main>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+function toggleTheme() {
+  const dark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('wc-spec-v3-theme', dark ? 'dark' : 'light');
+}
+(function(){
+  if(localStorage.getItem('wc-spec-v3-theme')==='dark') document.documentElement.classList.add('dark');
+})();
+const secs = document.querySelectorAll('.sec[id]');
+const links = document.querySelectorAll('#toc a');
+const io = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      links.forEach(l=>l.classList.remove('on'));
+      const link = document.querySelector('#toc a[href="#'+e.target.id+'"]');
+    if(link) link.classList.add('on');
+    }
+  });
+},{threshold:0.15});
+secs.forEach(sec=>io.observe(sec));
+</script>
+<button class="theme-fab" onclick="toggleTheme()" title="Toggle theme">
+  <span class="ll">🌙</span><span class="ld">☀️</span>
+</button>
+</body>
+</html>

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⦃param⦄ 5.0 Architecture - Dev Team Presentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&family=Oxygen+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --text-muted: #888888;
+            --border-color: #e5e5e5;
+            --border-light: #f0f0f0;
+            --bg-subtle: #fafafa;
+            --nav-width: 240px;
+        }
+        body { font-family: 'Oxygen', sans-serif; font-weight: 400; line-height: 1.75; color: var(--text-primary); background: #ffffff; font-size: 15px; }
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar { width: var(--nav-width); border-right: 1px solid var(--border-color); padding: 32px 24px; position: fixed; height: 100vh; overflow-y: auto; background: #fff; }
+        .sidebar-brand { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+        .sidebar-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 32px; }
+        .sidebar-nav { list-style: none; }
+        .sidebar-nav li { margin-bottom: 6px; }
+        .sidebar-nav a { display: block; padding: 6px 0; color: var(--text-muted); text-decoration: none; font-size: 0.85rem; transition: color 0.15s; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { color: var(--text-primary); }
+        .sidebar-nav a.active { font-weight: 700; }
+        .sidebar-nav .nav-number { display: inline-block; width: 28px; color: var(--text-muted); }
+        .sidebar-nav .nav-section { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-top: 20px; margin-bottom: 8px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+        .sidebar-footer { position: absolute; bottom: 24px; left: 24px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; }
+        .main { flex: 1; margin-left: var(--nav-width); padding: 60px 80px; max-width: 950px; }
+        .page-header { margin-bottom: 60px; padding-bottom: 48px; border-bottom: 1px solid var(--border-color); }
+        .page-label { font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 20px; }
+        .page-title { font-size: 3rem; font-weight: 700; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 20px; }
+        .page-subtitle { font-size: 1.15rem; color: var(--text-secondary); font-weight: 300; max-width: 560px; }
+        .page-meta { display: flex; gap: 60px; margin-top: 40px; }
+        .page-meta-item { font-size: 0.9rem; }
+        .page-meta-label { font-weight: 700; margin-bottom: 4px; }
+        .page-meta-value { color: var(--text-secondary); }
+        section { margin-bottom: 80px; scroll-margin-top: 40px; }
+        h2 { font-size: 1.8rem; font-weight: 700; margin-bottom: 24px; letter-spacing: -0.5px; }
+        h3 { font-size: 1.2rem; font-weight: 700; margin-top: 48px; margin-bottom: 16px; }
+        h4 { font-size: 1rem; font-weight: 700; margin-top: 32px; margin-bottom: 12px; color: var(--text-secondary); }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        ul, ol { margin-bottom: 20px; padding-left: 24px; }
+        li { margin-bottom: 8px; color: var(--text-secondary); }
+        li strong { color: var(--text-primary); }
+        table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border-light); }
+        th { font-weight: 700; border-bottom: 1px solid var(--border-color); }
+        td { color: var(--text-secondary); }
+        code { font-family: 'Oxygen Mono', monospace; font-size: 0.85em; padding: 2px 6px; background: var(--bg-subtle); border-radius: 3px; }
+        pre { font-family: 'Oxygen Mono', monospace; font-size: 0.8rem; line-height: 1.6; padding: 24px; background: var(--bg-subtle); border-radius: 4px; overflow-x: auto; margin: 24px 0; }
+        .callout { padding: 20px 24px; border-left: 2px solid var(--text-primary); margin: 28px 0; }
+        .callout p { margin: 0; }
+        .callout-label { font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .illustration { margin: 40px 0; text-align: center; }
+        .illustration svg { max-width: 100%; height: auto; }
+        .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 32px 0; }
+        .metric { text-align: center; padding: 20px 16px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .metric-value { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+        .metric-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+        .dev-streams { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 32px 0; }
+        .stream { padding: 24px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .stream-name { font-weight: 700; font-size: 1rem; margin-bottom: 8px; }
+        .stream-desc { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px; }
+        .stream-tech { font-size: 0.75rem; color: var(--text-muted); }
+        .pipeline { display: flex; gap: 0; margin: 32px 0; }
+        .pipeline-stage { flex: 1; padding: 16px 12px; border: 1px solid var(--border-color); border-right: none; text-align: center; }
+        .pipeline-stage:last-child { border-right: 1px solid var(--border-color); }
+        .pipeline-stage h5 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .pipeline-stage p { font-size: 0.75rem; margin: 0; color: var(--text-muted); }
+        hr { border: none; border-top: 1px solid var(--border-color); margin: 60px 0; }
+        @keyframes flowRight { 0% { transform: translateX(-8px); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateX(8px); opacity: 0; } }
+        @keyframes flowDown { 0% { transform: translateY(-8px); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        @keyframes dash { to { stroke-dashoffset: -20; } }
+        .flow-dot { animation: flowRight 2s ease-in-out infinite; }
+        .flow-dot-down { animation: flowDown 2s ease-in-out infinite; }
+        .animated-dash { stroke-dasharray: 4, 4; animation: dash 1s linear infinite; }
+        @media (max-width: 1024px) { .sidebar { display: none; } .main { margin-left: 0; padding: 40px 24px; } .metrics, .dev-streams { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+    <div class="sidebar-brand">⦃param⦄ 5.0</div>
+    <div class="sidebar-subtitle">Architecture Deep Dive</div>
+    <ul class="sidebar-nav">
+        <li><a href="#overview" class="active"><span class="nav-number">01.</span>Why 5.0</a></li>
+        <li><a href="#problems"><span class="nav-number">02.</span>Current Problems</a></li>
+        <li class="nav-section">Architecture</li>
+        <li><a href="#architecture"><span class="nav-number">03.</span>System Overview</a></li>
+        <li><a href="#paramledger"><span class="nav-number">04.</span>paramledger 2.0</a></li>
+        <li><a href="#gateway"><span class="nav-number">05.</span>ParamGateway</a></li>
+        <li><a href="#gprm"><span class="nav-number">06.</span>gPRM 2.0</a></li>
+        <li><a href="#syncfactory"><span class="nav-number">07.</span>SyncFactory 2.0</a></li>
+        <li><a href="#paramai"><span class="nav-number">08.</span>ParamAI Integration</a></li>
+        <li class="nav-section">Applications</li>
+        <li><a href="#wallet"><span class="nav-number">09.</span>Wallet UI 3.0</a></li>
+        <li><a href="#floforward"><span class="nav-number">10.</span>FloForward</a></li>
+        <li class="nav-section">Execution</li>
+        <li><a href="#streams"><span class="nav-number">11.</span>Dev Streams</a></li>
+        <li><a href="#decisions"><span class="nav-number">12.</span>Tech Decisions</a></li>
+    </ul>
+    <div class="sidebar-footer">Dev Team Presentation<br>Feb 2026 · Internal</div>
+</nav>
+<main class="main">
+<header class="page-header">
+    <p class="page-label">Dev Team · Architecture Review</p>
+    <h1 class="page-title">Building for<br>Enterprise Scale.</h1>
+    <p class="page-subtitle">⦃param⦄ 5.0 is a complete platform redesign focused on performance, reliability, and AI-native application generation.</p>
+    <div class="page-meta">
+        <div class="page-meta-item"><div class="page-meta-label">Audience</div><div class="page-meta-value">Engineering Team</div></div>
+        <div class="page-meta-item"><div class="page-meta-label">Focus</div><div class="page-meta-value">Why & How</div></div>
+        <div class="page-meta-item"><div class="page-meta-label">Streams</div><div class="page-meta-value">6 Parallel Tracks</div></div>
+    </div>
+</header>
+
+<section id="overview">
+<h2>Why 5.0</h2>
+<p>Version 5.0 is not an incremental update—it is a fundamental rearchitecture. We are addressing systemic issues that cannot be fixed with patches: polling-based data flow, sequential processing, missing transactions, and a UI that fights against enterprise workflows instead of enabling them.</p>
+<p>The goal is simple: make ⦃param⦄ the platform enterprises trust for mission-critical commerce workflows. That requires bulletproof reliability, sub-second response times, and applications that feel purpose-built for each customer domain.</p>
+
+<div class="metrics">
+    <div class="metric"><div class="metric-value">100x</div><div class="metric-label">Throughput target</div></div>
+    <div class="metric"><div class="metric-value">0</div><div class="metric-label">Missing transactions</div></div>
+    <div class="metric"><div class="metric-value">&lt;2s</div><div class="metric-label">End-to-end latency</div></div>
+    <div class="metric"><div class="metric-value">AI</div><div class="metric-label">Native integration</div></div>
+</div>
+
+<h3>Core Principles</h3>
+<p>Every architectural decision in 5.0 follows from four principles:</p>
+<p><strong>Event-Driven Everything.</strong> Polling is the enemy of performance. NATS JetStream becomes the backbone, pushing events the instant they occur. No more 3.5-second NIFI delays. No more CouchDB polling loops.</p>
+<p><strong>Bulletproof Blockchain.</strong> Missing or duplicate transactions destroy enterprise trust. We are adding idempotency guarantees, write-ahead logging, and proper consensus handling to ensure every transaction is processed exactly once.</p>
+<p><strong>AI-Native Design.</strong> ParamAI is not a bolt-on—it is integrated at every layer. From document classification at ingestion to anomaly detection at validation to predictive insights in the UI.</p>
+<p><strong>Generated Applications.</strong> The generic wallet UI served us for experimentation, but enterprises need domain-specific applications. FloForward generates complete React apps from business requirements, with the three-panel layout adapted to each use case.</p>
+</section>
+
+<hr>
+
+<section id="problems">
+<h2>Current Problems</h2>
+<p>Before we build, we need to understand exactly what is broken. These are not edge cases—they are systemic issues affecting every customer deployment.</p>
+
+<h3>Reliability Crisis</h3>
+<p>The most critical issue: transactions sometimes go missing or appear twice. This destroys the fundamental value proposition of a blockchain platform. Root causes include lack of idempotency in paramledger, race conditions in concurrent block production, and no write-ahead logging for crash recovery.</p>
+
+<div class="callout">
+    <div class="callout-label">Impact</div>
+    <p>When an Invoice transaction disappears, the entire procurement chain breaks. Finance cannot reconcile. Audits fail. Customer trust evaporates.</p>
+</div>
+
+<h3>Performance Ceiling</h3>
+<p>Current throughput: 0.33 documents per second (17 docs in 51.5 seconds). This is 1,000x slower than enterprise requirements. The bottleneck is not any single component—it is the polling-based architecture that adds latency at every step.</p>
+
+<table>
+    <thead><tr><th>Component</th><th>Problem</th><th>Impact</th></tr></thead>
+    <tbody>
+        <tr><td>NIFI</td><td>3.5s polling delay</td><td>73% of processing time is waiting</td></tr>
+        <tr><td>SyncFactory</td><td>CouchDB polling</td><td>5-10s sync latency</td></tr>
+        <tr><td>Transform</td><td>Sequential, single-threaded</td><td>Cannot parallelize</td></tr>
+        <tr><td>gPRM</td><td>One transaction at a time</td><td>Throughput ceiling</td></tr>
+    </tbody>
+</table>
+
+<h3>Observability Gaps</h3>
+<p>When clients send documents via API, they get "200 OK" and then... silence. No callback when processing completes. No notification when validation fails. Errors disappear into scattered log files that clients cannot access. The result: "fire and forget" complaints from enterprise IT teams.</p>
+
+<h3>Wallet UX Problems</h3>
+<p>The current wallet requires 4-5 clicks to reach any data: Apps → Workflows → Listing → Details. This navigation model makes sense for a platform showcase but fails for daily enterprise use. Users need contextual, domain-specific interfaces—not a generic portal.</p>
+</section>
+
+<hr>
+
+<section id="architecture">
+<h2>System Architecture</h2>
+<p>The 5.0 architecture is built around NATS JetStream as the central event backbone. Every component communicates through events, enabling true parallelism and eliminating polling delays.</p>
+
+<div class="illustration">
+<svg width="750" height="500" viewBox="0 0 750 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <text x="375" y="24" font-family="Oxygen" font-size="14" font-weight="700" fill="#1a1a1a" text-anchor="middle">⦃param⦄ 5.0 System Architecture</text>
+    
+    <!-- External Sources -->
+    <text x="100" y="60" font-family="Oxygen" font-size="10" fill="#888" text-anchor="middle">External Sources</text>
+    <rect x="30" y="70" width="60" height="32" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="60" y="90" font-family="Oxygen" font-size="9" fill="#4a4a4a" text-anchor="middle">SFTP</text>
+    <rect x="100" y="70" width="60" height="32" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="130" y="90" font-family="Oxygen" font-size="9" fill="#4a4a4a" text-anchor="middle">REST API</text>
+    <rect x="170" y="70" width="60" height="32" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="200" y="90" font-family="Oxygen" font-size="9" fill="#4a4a4a" text-anchor="middle">Webhooks</text>
+    
+    <!-- Arrow to Gateway -->
+    <line x1="130" y1="102" x2="130" y2="130" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="130" cy="116" r="2" fill="#1a1a1a" class="flow-dot-down"/>
+    <polygon points="130,136 126,130 134,130" fill="#1a1a1a"/>
+    
+    <!-- ParamGateway -->
+    <rect x="40" y="140" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="130" y="165" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">ParamGateway</text>
+    <text x="130" y="180" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Ingestion · Transform · Validate</text>
+    <text x="130" y="195" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Python/pandas plugins</text>
+    
+    <!-- NATS JetStream -->
+    <rect x="270" y="160" width="210" height="50" rx="4" stroke="#1a1a1a" stroke-width="1.5" fill="none"/>
+    <text x="375" y="190" font-family="Oxygen" font-size="12" font-weight="700" fill="#1a1a1a" text-anchor="middle">NATS JetStream</text>
+    
+    <!-- Arrow Gateway to NATS -->
+    <line x1="220" y1="175" x2="265" y2="185" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="242" cy="180" r="2" fill="#1a1a1a" class="flow-dot"/>
+    <polygon points="270,185 262,182 264,189" fill="#1a1a1a"/>
+    
+    <!-- gPRM -->
+    <rect x="530" y="140" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="620" y="165" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">gPRM 2.0</text>
+    <text x="620" y="180" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Batch encrypt · IPFS upload</text>
+    <text x="620" y="195" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Transaction signing</text>
+    
+    <!-- Arrow NATS to gPRM -->
+    <line x1="480" y1="185" x2="525" y2="175" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="502" cy="180" r="2" fill="#1a1a1a" class="flow-dot" style="animation-delay: 0.3s"/>
+    <polygon points="530,175 522,172 524,180" fill="#1a1a1a"/>
+    
+    <!-- paramledger -->
+    <rect x="530" y="250" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="620" y="275" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">paramledger 2.0</text>
+    <text x="620" y="290" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">RAFT consensus · WAL</text>
+    <text x="620" y="305" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Idempotency · RocksDB</text>
+    
+    <!-- Arrow gPRM to paramledger -->
+    <line x1="620" y1="210" x2="620" y2="245" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="620" cy="228" r="2" fill="#1a1a1a" class="flow-dot-down" style="animation-delay: 0.5s"/>
+    <polygon points="620,250 616,244 624,244" fill="#1a1a1a"/>
+    
+    <!-- Storage -->
+    <rect x="530" y="360" width="85" height="50" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="572" y="385" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">IPFS</text>
+    <text x="572" y="398" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Documents</text>
+    <rect x="625" y="360" width="85" height="50" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="667" y="385" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">CouchDB</text>
+    <text x="667" y="398" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Transactions</text>
+    
+    <line x1="620" y1="320" x2="620" y2="355" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="3,2"/>
+    
+    <!-- SyncFactory -->
+    <rect x="285" y="280" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="375" y="305" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">SyncFactory 2.0</text>
+    <text x="375" y="320" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Event-driven sync</text>
+    <text x="375" y="335" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">State machine compiler</text>
+    
+    <line x1="530" y1="285" x2="485" y2="285" stroke="#1a1a1a" stroke-width="1" class="animated-dash"/>
+    <text x="507" y="280" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">events</text>
+    
+    <line x1="375" y1="210" x2="375" y2="275" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="375" cy="242" r="2" fill="#1a1a1a" class="flow-dot-down" style="animation-delay: 0.7s"/>
+    <polygon points="375,280 371,274 379,274" fill="#1a1a1a"/>
+    
+    <!-- MongoDB -->
+    <rect x="285" y="390" width="180" height="50" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="375" y="415" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">MongoDB</text>
+    <text x="375" y="430" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Application data · State machines</text>
+    
+    <line x1="375" y1="350" x2="375" y2="385" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="375,390 371,384 379,384" fill="#1a1a1a"/>
+    
+    <!-- ParamAI -->
+    <rect x="40" y="280" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="130" y="305" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">ParamAI</text>
+    <text x="130" y="320" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Lightning RAG · Quantum Minds</text>
+    <text x="130" y="335" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Document AI · Insights</text>
+    
+    <line x1="220" y1="315" x2="280" y2="290" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="250" y="295" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">tasks</text>
+    
+    <!-- Wallet UI -->
+    <rect x="40" y="390" width="180" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="130" y="415" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">Wallet UI 3.0</text>
+    <text x="130" y="430" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">3-Panel adaptive layout</text>
+    <text x="130" y="445" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Generated React apps</text>
+    
+    <line x1="285" y1="425" x2="225" y2="425" stroke="#1a1a1a" stroke-width="1" stroke-dasharray="3,2"/>
+    
+    <text x="40" y="485" font-family="Oxygen" font-size="8" fill="#888">— Data flow    - - Event stream    ● Animated: active processing</text>
+</svg>
+</div>
+
+<h3>Data Flow</h3>
+<p>Understanding the data flow helps explain why each component exists:</p>
+<ol>
+    <li><strong>Ingestion:</strong> Documents arrive via SFTP, API, or webhooks. ParamGateway registers a Task ID and queues for processing.</li>
+    <li><strong>Transform:</strong> Python/pandas plugins clean, map, and enrich documents. DataFrames convert to JSON at the boundary.</li>
+    <li><strong>Validate:</strong> Schema checks, reference lookups (with caching), business rules. Failures go to DLQ with full context.</li>
+    <li><strong>Submit:</strong> gPRM batches transactions, encrypts for destination exchanges, uploads to IPFS, signs and submits to paramledger.</li>
+    <li><strong>Consensus:</strong> paramledger uses RAFT to produce blocks. WAL ensures crash recovery. Idempotency prevents duplicates.</li>
+    <li><strong>Sync:</strong> SyncFactory subscribes to block events, compiles state machines, updates MongoDB for application queries.</li>
+    <li><strong>UI:</strong> Wallet reads from MongoDB, displays in contextual 3-panel layout, integrates ParamAI insights.</li>
+</ol>
+</section>
+
+<hr>
+
+<section id="paramledger">
+<h2>paramledger 2.0</h2>
+<p>The blockchain core gets the most critical improvements. Our reputation depends on transaction reliability—every transaction must be processed exactly once, with full crash recovery guarantees.</p>
+
+<h3>Idempotency Layer</h3>
+<p>Every transaction receives a deterministic ID computed from sender, nonce, and content hash. Before processing, we check a bloom filter for likely duplicates, then verify against storage. This prevents the duplicate transaction problem that has plagued production deployments.</p>
+
+<div class="illustration">
+<svg width="600" height="160" viewBox="0 0 600 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="40" y="60" width="100" height="40" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="90" y="78" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">Transaction</text>
+    <text x="90" y="92" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">from gPRM</text>
+    
+    <line x1="140" y1="80" x2="175" y2="80" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="157" cy="80" r="2" fill="#1a1a1a" class="flow-dot"/>
+    <polygon points="180,80 174,76 174,84" fill="#1a1a1a"/>
+    
+    <rect x="185" y="60" width="100" height="40" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="235" y="78" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">Compute ID</text>
+    <text x="235" y="92" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">hash(sender+nonce)</text>
+    
+    <line x1="285" y1="80" x2="320" y2="80" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="325,80 319,76 319,84" fill="#1a1a1a"/>
+    
+    <rect x="330" y="60" width="100" height="40" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="380" y="78" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">Bloom Filter</text>
+    <text x="380" y="92" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">fast duplicate check</text>
+    
+    <line x1="430" y1="70" x2="475" y2="45" stroke="#1a1a1a" stroke-width="1"/>
+    <text x="445" y="50" font-family="Oxygen" font-size="8" fill="#888">new</text>
+    <rect x="480" y="25" width="80" height="36" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="520" y="43" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">Write WAL</text>
+    <text x="520" y="55" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">then process</text>
+    
+    <line x1="430" y1="90" x2="475" y2="115" stroke="#1a1a1a" stroke-width="1"/>
+    <text x="445" y="112" font-family="Oxygen" font-size="8" fill="#888">maybe</text>
+    <rect x="480" y="100" width="80" height="36" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="520" y="118" font-family="Oxygen" font-size="10" font-weight="700" fill="#1a1a1a" text-anchor="middle">Check Store</text>
+    <text x="520" y="130" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">verify duplicate</text>
+</svg>
+</div>
+
+<h3>Write-Ahead Logging</h3>
+<p>Before any transaction enters consensus, it is written to a durable WAL. If the node crashes mid-processing, recovery replays the WAL to restore consistent state. This eliminates the missing transaction problem caused by crashes during block production.</p>
+
+<h3>Storage Migration</h3>
+<p>CouchDB served us well for prototyping, but it is not optimized for blockchain workloads. RocksDB (or BadgerDB) provides:</p>
+<ul>
+    <li><strong>LSM-tree optimization:</strong> Designed for append-heavy workloads like blockchains</li>
+    <li><strong>Embedded operation:</strong> No network overhead, no HTTP parsing</li>
+    <li><strong>Strict serializability:</strong> Stronger consistency than CouchDB eventual model</li>
+    <li><strong>10x write performance:</strong> Direct syscalls vs HTTP round-trips</li>
+</ul>
+
+<h3>Batched Block Production</h3>
+<p>Current: 1-10 transactions per block. Target: 100-1000 transactions per block. Batching amortizes consensus overhead across many transactions, dramatically increasing throughput. Configurable batch size and timeout (default 100ms) balance latency vs throughput.</p>
+</section>
+
+<hr>
+
+<section id="gateway">
+<h2>ParamGateway</h2>
+<p>ParamGateway unifies dataIO (ingestion and transformation) with message-db tasks (event automation) into a single, observable service. This eliminates coordination complexity and provides unified tracing across the entire document lifecycle.</p>
+
+<h3>Why Python/Pandas for Transforms</h3>
+<p>Data transformation is fundamentally a data science problem. Go is fast but awkward for data manipulation. JavaScript struggles with large files. Python with pandas is the natural choice:</p>
+<ul>
+    <li><strong>Data team familiarity:</strong> Everyone knows pandas</li>
+    <li><strong>AI code generation:</strong> Claude/Copilot generate pandas fluently</li>
+    <li><strong>Vectorized operations:</strong> Fast even for large datasets</li>
+    <li><strong>DataFrame abstraction:</strong> Natural for tabular enterprise data</li>
+</ul>
+<p>The gateway core runs in Go for concurrency and orchestration. Python workers handle transformation, communicating via serialized DataFrames. JSON conversion happens at the boundary.</p>
+
+<h3>Plugin Architecture</h3>
+<p>Client-specific logic lives in isolated plugins—not core code. Each client gets a plugin directory with pre-transform, post-transform, and validator plugins. Plugins are hot-reloadable, versioned, and sandboxed with resource limits.</p>
+<pre>plugins/
+├── ultratech/
+│   ├── manifest.yaml
+│   ├── pretransform/
+│   │   └── invoice_cleanup.py
+│   └── validators/
+│       └── amount_tolerance.py
+└── bosch/
+    └── ...</pre>
+
+<h3>Observability</h3>
+<p>Every document gets a Task ID that persists through its entire journey. Clients register callback URLs for status notifications. The dashboard shows real-time processing status, errors with context, and one-click retry. No more "fire and forget."</p>
+</section>
+
+<hr>
+
+<section id="gprm">
+<h2>gPRM 2.0</h2>
+<p>gPRM is the gateway between application layer and blockchain. Version 2.0 focuses on batching and parallelization to remove throughput ceilings.</p>
+
+<h3>Batch Processing Pipeline</h3>
+<div class="illustration">
+<svg width="650" height="100" viewBox="0 0 650 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="30" width="90" height="45" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="65" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Receive</text>
+    <text x="65" y="64" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Batch N docs</text>
+    
+    <line x1="110" y1="52" x2="135" y2="52" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="122" cy="52" r="2" fill="#1a1a1a" class="flow-dot"/>
+    
+    <rect x="140" y="30" width="90" height="45" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="185" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Encrypt</text>
+    <text x="185" y="64" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Parallel workers</text>
+    
+    <line x1="230" y1="52" x2="255" y2="52" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="242" cy="52" r="2" fill="#1a1a1a" class="flow-dot" style="animation-delay: 0.2s"/>
+    
+    <rect x="260" y="30" width="90" height="45" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="305" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">IPFS Upload</text>
+    <text x="305" y="64" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Connection pool</text>
+    
+    <line x1="350" y1="52" x2="375" y2="52" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="362" cy="52" r="2" fill="#1a1a1a" class="flow-dot" style="animation-delay: 0.4s"/>
+    
+    <rect x="380" y="30" width="90" height="45" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="425" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Sign</text>
+    <text x="425" y="64" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Batch signing</text>
+    
+    <line x1="470" y1="52" x2="495" y2="52" stroke="#1a1a1a" stroke-width="1"/>
+    <circle cx="482" cy="52" r="2" fill="#1a1a1a" class="flow-dot" style="animation-delay: 0.6s"/>
+    
+    <rect x="500" y="30" width="90" height="45" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="545" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Submit</text>
+    <text x="545" y="64" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">To paramledger</text>
+</svg>
+</div>
+
+<h3>Key Optimizations</h3>
+<table>
+    <thead><tr><th>Optimization</th><th>Current</th><th>5.0</th><th>Impact</th></tr></thead>
+    <tbody>
+        <tr><td>IPFS connections</td><td>New per request</td><td>Connection pool</td><td>5-10x faster uploads</td></tr>
+        <tr><td>Encryption</td><td>Sequential</td><td>Parallel workers</td><td>Linear scaling with cores</td></tr>
+        <tr><td>Transaction signing</td><td>One at a time</td><td>Batch signing</td><td>Amortized overhead</td></tr>
+        <tr><td>Submission</td><td>Individual</td><td>Batched</td><td>100 txns in ~200ms</td></tr>
+    </tbody>
+</table>
+</section>
+
+<hr>
+
+<section id="syncfactory">
+<h2>SyncFactory 2.0</h2>
+<p>SyncFactory bridges the blockchain layer and application layer, transforming raw transactions into queryable state machine data in MongoDB. Version 2.0 replaces polling with event subscription.</p>
+
+<h3>Event-Driven Architecture</h3>
+<p>Current SyncFactory polls CouchDB for new blocks every few seconds. This adds 5-10 seconds of sync latency and wastes resources checking for changes that have not happened.</p>
+<p>In 5.0, SyncFactory subscribes to NATS JetStream. When paramledger produces a block, it publishes an event. SyncFactory processes immediately—sub-second sync latency.</p>
+
+<h3>State Machine Compiler</h3>
+<p>The compiler is the intelligence layer. Given a raw transaction and state machine definition, it:</p>
+<ol>
+    <li>Validates the transition is legal from current state</li>
+    <li>Downloads and decrypts the document from IPFS</li>
+    <li>Routes to the correct MongoDB collection based on workflow</li>
+    <li>Updates state history and metadata</li>
+    <li>Emits state transition events for automation triggers</li>
+</ol>
+</section>
+
+<hr>
+
+<section id="paramai">
+<h2>ParamAI Integration</h2>
+<p>ParamAI is not a separate product bolted on—it is woven into the platform at every layer. The three core components (Lightning RAG, Quantum Minds, MCP Streams) each serve specific roles in the 5.0 architecture.</p>
+
+<div class="illustration">
+<svg width="650" height="200" viewBox="0 0 650 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <text x="325" y="20" font-family="Oxygen" font-size="12" font-weight="700" fill="#1a1a1a" text-anchor="middle">ParamAI Integration Points</text>
+    
+    <rect x="40" y="50" width="170" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="125" y="72" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">Lightning RAG</text>
+    <text x="125" y="88" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Document understanding</text>
+    <text x="125" y="102" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Schema-aware extraction</text>
+    
+    <rect x="240" y="50" width="170" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="325" y="72" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">Quantum Minds</text>
+    <text x="325" y="88" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Workflow automation</text>
+    <text x="325" y="102" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">Pre-built enterprise minds</text>
+    
+    <rect x="440" y="50" width="170" height="70" rx="4" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="525" y="72" font-family="Oxygen" font-size="11" font-weight="700" fill="#1a1a1a" text-anchor="middle">MCP Streams</text>
+    <text x="525" y="88" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">External data integration</text>
+    <text x="525" y="102" font-family="Oxygen" font-size="9" fill="#888" text-anchor="middle">AI-powered ETL</text>
+    
+    <text x="125" y="140" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Gateway transforms, Field extraction</text>
+    <text x="325" y="140" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Anomaly detection, ETA prediction</text>
+    <text x="525" y="140" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">ERP integration, Market data</text>
+</svg>
+</div>
+
+<h3>Pre-Built Enterprise Minds</h3>
+<table>
+    <thead><tr><th>Mind</th><th>Purpose</th><th>Trigger</th></tr></thead>
+    <tbody>
+        <tr><td>Document Classifier</td><td>Identify document type (Invoice, PO, BOL, Customs)</td><td>Ingestion (unknown type)</td></tr>
+        <tr><td>Field Extractor</td><td>OCR + LLM extraction, schema-aware</td><td>Transform pipeline</td></tr>
+        <tr><td>ETA Predictor</td><td>Shipping ETA from port delays, weather, history</td><td>User query, scheduled</td></tr>
+        <tr><td>Anomaly Detector</td><td>Invoice matching, price variance, quantity diff</td><td>State transition</td></tr>
+        <tr><td>Auto Approver</td><td>Rule-based + ML-predicted approvals</td><td>Document creation</td></tr>
+    </tbody>
+</table>
+</section>
+
+<hr>
+
+<section id="wallet">
+<h2>Wallet UI 3.0</h2>
+<p>The generic wallet served us for platform development, but enterprises need domain-specific applications. Wallet 3.0 introduces an adaptive three-panel layout that can be configured for different use cases—not just AI chat on the right.</p>
+
+<h3>Three-Panel Adaptive Layout</h3>
+<p>The three-panel design is a principle, not a fixed implementation. Each panel purpose adapts to the application domain:</p>
+
+<div class="illustration">
+<svg width="700" height="220" viewBox="0 0 700 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <text x="350" y="20" font-family="Oxygen" font-size="12" font-weight="700" fill="#1a1a1a" text-anchor="middle">Three-Panel Layout Variations</text>
+    
+    <text x="175" y="50" font-family="Oxygen" font-size="10" font-weight="700" fill="#4a4a4a" text-anchor="middle">Variant A: AI Copilot</text>
+    <rect x="40" y="60" width="70" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="75" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">Navigation</text>
+    <text x="75" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Context filters</text>
+    
+    <rect x="115" y="60" width="120" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="175" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">Primary Content</text>
+    <text x="175" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Document details</text>
+    
+    <rect x="240" y="60" width="70" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="275" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">AI Copilot</text>
+    <text x="275" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Chat, Suggestions</text>
+    
+    <text x="175" y="160" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Best for: Complex workflows</text>
+    
+    <text x="525" y="50" font-family="Oxygen" font-size="10" font-weight="700" fill="#4a4a4a" text-anchor="middle">Variant B: Dense Enterprise</text>
+    <rect x="390" y="60" width="70" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="425" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">List</text>
+    <text x="425" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Quick scan</text>
+    
+    <rect x="465" y="60" width="120" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="525" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">Detail View</text>
+    <text x="525" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Full document</text>
+    
+    <rect x="590" y="60" width="70" height="80" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="625" y="80" font-family="Oxygen" font-size="8" font-weight="700" fill="#1a1a1a" text-anchor="middle">Related</text>
+    <text x="625" y="95" font-family="Oxygen" font-size="7" fill="#888" text-anchor="middle">Linked docs</text>
+    
+    <text x="525" y="160" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Best for: High-volume operations</text>
+    
+    <text x="175" y="195" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Variant C: Insights Panel — AI-generated insights, anomaly alerts</text>
+    <text x="525" y="195" font-family="Oxygen" font-size="8" fill="#888" text-anchor="middle">Variant D: Action Center — Pending approvals, tasks</text>
+</svg>
+</div>
+
+<h3>Domain-Specific Applications</h3>
+<p>Instead of one generic wallet, we generate applications tailored to each customer workflow. An EXIM tracking app looks different from a procurement app, which looks different from a production planning app. Same platform, purpose-built interfaces.</p>
+<ul>
+    <li><strong>1-2 clicks to any data:</strong> No more Apps → Workflows → Listing → Details</li>
+    <li><strong>Contextual navigation:</strong> Left panel shows what is relevant to current workflow</li>
+    <li><strong>Dense when needed:</strong> Enterprise users want information density, not whitespace</li>
+    <li><strong>AI where helpful:</strong> Insights and suggestions, not chat for chat sake</li>
+</ul>
+</section>
+
+<hr>
+
+<section id="floforward">
+<h2>FloForward</h2>
+<p>FloForward is our AI-powered application generator. Given business requirements (BRD), it produces complete, deployable React applications with state machine integration, role-based access control, and blockchain connectivity.</p>
+
+<h3>Generation Pipeline</h3>
+<div class="pipeline">
+    <div class="pipeline-stage"><h5>BRD Input</h5><p>Natural language</p></div>
+    <div class="pipeline-stage"><h5>Commerce Map</h5><p>Pattern match</p></div>
+    <div class="pipeline-stage"><h5>State Machine</h5><p>Workflow gen</p></div>
+    <div class="pipeline-stage"><h5>Schema</h5><p>Field definitions</p></div>
+    <div class="pipeline-stage"><h5>React App</h5><p>UI generation</p></div>
+    <div class="pipeline-stage"><h5>Deploy</h5><p>Live system</p></div>
+</div>
+
+<h3>Universal Commerce Pattern</h3>
+<p>Every business workflow maps to the same fundamental pattern:</p>
+<pre>Initiation → Agreement → Execution → Settlement → Completion</pre>
+<p>Procurement, HR, projects, compliance, creative workflows—all follow this structure. FloForward recognizes this pattern in BRDs and generates appropriate state machines automatically. This insight is the foundation of our "SaaS killer" positioning.</p>
+</section>
+
+<hr>
+
+<section id="streams">
+<h2>Development Streams</h2>
+<p>The 5.0 work is organized into six parallel development streams. Each stream has clear boundaries and interfaces, enabling independent progress while maintaining system coherence.</p>
+
+<div class="dev-streams">
+    <div class="stream">
+        <div class="stream-name">Stream 1: Blockchain Core</div>
+        <div class="stream-desc">paramledger 2.0 with idempotency, WAL, RocksDB migration, batched block production</div>
+        <div class="stream-tech">Go · RocksDB · RAFT</div>
+    </div>
+    <div class="stream">
+        <div class="stream-name">Stream 2: ParamGateway</div>
+        <div class="stream-desc">Unified ingestion/transform/automation with Python plugin system and observability layer</div>
+        <div class="stream-tech">Go · Python · pandas · NATS</div>
+    </div>
+    <div class="stream">
+        <div class="stream-name">Stream 3: gPRM + SyncFactory</div>
+        <div class="stream-desc">Batch processing pipeline, event-driven sync, state machine compiler</div>
+        <div class="stream-tech">Go · NATS · MongoDB</div>
+    </div>
+    <div class="stream">
+        <div class="stream-name">Stream 4: ParamAI Integration</div>
+        <div class="stream-desc">Pre-built enterprise minds, NATS task queue, document AI pipelines</div>
+        <div class="stream-tech">Python · Quantum Minds · Lightning RAG</div>
+    </div>
+    <div class="stream">
+        <div class="stream-name">Stream 5: Wallet UI 3.0</div>
+        <div class="stream-desc">Three-panel adaptive layout, component library, domain-specific app shells</div>
+        <div class="stream-tech">React · TypeScript · Shadcn/UI</div>
+    </div>
+    <div class="stream">
+        <div class="stream-name">Stream 6: FloForward</div>
+        <div class="stream-desc">BRD processing, commerce pattern mapping, React app generation</div>
+        <div class="stream-tech">Python · LangGraph · React codegen</div>
+    </div>
+</div>
+
+<h3>Stream Dependencies</h3>
+<p>While streams can progress in parallel, some dependencies exist:</p>
+<div class="illustration">
+<svg width="550" height="160" viewBox="0 0 550 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="40" y="30" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="80" y="55" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Blockchain</text>
+    
+    <rect x="140" y="30" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="180" y="55" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Gateway</text>
+    
+    <rect x="240" y="30" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="280" y="50" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">gPRM+Sync</text>
+    
+    <rect x="340" y="30" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="380" y="55" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">ParamAI</text>
+    
+    <rect x="240" y="100" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="280" y="125" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">Wallet UI</text>
+    
+    <rect x="340" y="100" width="80" height="40" rx="3" stroke="#1a1a1a" stroke-width="1" fill="none"/>
+    <text x="380" y="125" font-family="Oxygen" font-size="9" font-weight="700" fill="#1a1a1a" text-anchor="middle">FloForward</text>
+    
+    <line x1="120" y1="50" x2="135" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="140,50 134,46 134,54" fill="#1a1a1a"/>
+    
+    <line x1="220" y1="50" x2="235" y2="50" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="240,50 234,46 234,54" fill="#1a1a1a"/>
+    
+    <line x1="280" y1="70" x2="280" y2="95" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="280,100 276,94 284,94" fill="#1a1a1a"/>
+    
+    <line x1="380" y1="70" x2="380" y2="95" stroke="#1a1a1a" stroke-width="1"/>
+    <polygon points="380,100 376,94 384,94" fill="#1a1a1a"/>
+    
+    <text x="460" y="50" font-family="Oxygen" font-size="8" fill="#888">— Required</text>
+    <text x="460" y="65" font-family="Oxygen" font-size="8" fill="#888">- - Optional</text>
+</svg>
+</div>
+</section>
+
+<hr>
+
+<section id="decisions">
+<h2>Technology Decisions</h2>
+<p>Key technology choices and their rationale:</p>
+
+<h3>Language Strategy</h3>
+<table>
+    <thead><tr><th>Component</th><th>Language</th><th>Rationale</th></tr></thead>
+    <tbody>
+        <tr><td>paramledger, gPRM, SyncFactory</td><td>Go</td><td>Concurrency, performance, team expertise</td></tr>
+        <tr><td>ParamGateway core</td><td>Go</td><td>Orchestration, event handling</td></tr>
+        <tr><td>Transform plugins</td><td>Python</td><td>pandas, AI code generation, data team familiarity</td></tr>
+        <tr><td>ParamAI</td><td>Python</td><td>ML ecosystem, LangChain, model libraries</td></tr>
+        <tr><td>Wallet UI</td><td>React/TypeScript</td><td>Component ecosystem, type safety, AI codegen</td></tr>
+    </tbody>
+</table>
+
+<h3>Why Go over Rust</h3>
+<p>We evaluated Rust for the performance-critical paths. Decision: Go provides 80-90% of Rust performance with significantly lower development friction. Our bottlenecks are architectural (polling, sequential processing), not language performance. Go concurrency model (goroutines, channels) maps naturally to our event-driven architecture.</p>
+
+<h3>Database Strategy</h3>
+<table>
+    <thead><tr><th>Layer</th><th>Database</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td>Blockchain ledger</td><td>RocksDB</td><td>LSM-optimized, embedded, deterministic</td></tr>
+        <tr><td>Transaction sync</td><td>CouchDB</td><td>Cross-node replication (existing)</td></tr>
+        <tr><td>Application layer</td><td>MongoDB</td><td>Dynamic schemas, aggregation, state machines</td></tr>
+        <tr><td>Caching</td><td>Redis + In-memory</td><td>Multi-tier lookup cache</td></tr>
+        <tr><td>Document storage</td><td>IPFS</td><td>Encrypted payloads, content addressing</td></tr>
+    </tbody>
+</table>
+
+<div class="callout">
+    <div class="callout-label">Key Insight</div>
+    <p>The 100x performance improvement comes from architecture (event-driven, parallel, batched), not language optimization. Choosing familiar tools (Go, Python, React) over exotic ones (Rust, Elixir) maximizes team velocity without sacrificing performance targets.</p>
+</div>
+</section>
+
+<hr>
+
+<footer style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 0.85rem;">
+    <p>⦃param⦄ Network · Architecture Presentation</p>
+    <p>Internal · Dev Team · February 2026</p>
+</footer>
+</main>
+</div>
+<script>
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        if (scrollY >= sectionTop - 100) current = section.getAttribute('id');
+    });
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+    });
+});
+</script>
+</body>
+</html>
