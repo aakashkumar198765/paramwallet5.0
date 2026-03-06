@@ -2962,7 +2962,16 @@ ENN response on failure (HTTP 500):
 { "res": "error", "status": false, "message": "Invalid otp" }
 ```
 
-`encryptedPayload` is decrypted by Wallet Backend using `SHA256(otp)` as the key with AES-CTR. The decrypted JSON contains:
+**Decryption of `encryptedPayload`**
+
+Wallet Backend decrypts `encryptedPayload` using the OTP-derived key and AES-CTR. Implementation (matches `otp.handler.ts`):
+
+1. **Key derivation:** `decryptionKey = SHA256(otp)` as a 64-character hex string (e.g. `createHash('sha256').update(otp).digest('hex')`).
+2. **Decrypt:** AES-CTR mode (e.g. `CryptoJS.AES.decrypt(encryptedPayload, decryptionKey, { mode: CryptoJS.mode.CTR })`).
+3. **Decode:** UTF-8 stringify the decrypted bytes.
+4. **Parse:** `JSON.parse(plaintext)` to obtain the payload object.
+
+The decrypted JSON contains:
 ```json
 {
   "ethID":     "0x6193b497...",   // org-level Ethereum address → stored as paramId
@@ -2970,6 +2979,8 @@ ENN response on failure (HTTP 500):
   "publicKey": "<public-key>"
 }
 ```
+
+If `encryptedPayload` is missing or decryption fails (invalid ciphertext, wrong OTP, etc.), the backend returns `null` and the response omits the `enn` object — the client receives `token`, `refreshToken`, `user`, etc., but no `enn` block.
 
 > **ENN naming note:** ENN's `ethID` maps to what the platform calls `paramId` (the 0x address). ENN's `paramID` maps to what the platform calls `pennId` (the EHPI code). These field names differ intentionally in the platform to avoid confusion.
 
@@ -3098,8 +3109,8 @@ POST   /auth/otp/verify
 **Action:**
 1. Call ENN `/v2/verify_otp` with `{ email, otp }`. ENN creates blockchain identity for first-time users during this step — no separate register call needed.
 2. If `ennResult.status = false` → 401
-3. Decrypt `encryptedPayload` using `SHA256(otp)` + AES-CTR → extract `ethID` (`paramId`) and `paramID` (`pennId`) and `publicKey`
-4. Look up user in `param_saas.subdomain_users` by `email` — if found, use stored `paramId` as fallback
+3. Decrypt `encryptedPayload` using `SHA256(otp)` as hex key + AES-CTR (see decryption steps above) → extract `ethID`, `paramID`, `publicKey`
+4. Look up user in `param_saas.subdomain_users` by `email`. Resolve `paramId` in this order: (a) `user.paramId` if user exists, (b) `ethID` from decrypted payload, (c) `ennResult.paramId` (legacy fallback). If none available → 502 "Session creation failed"
 5. `userId = SHA256(email.toLowerCase())`
 6. Generate JWT token: `{ userId, email, paramId, exp }` + UUID refresh token
 7. Store session in `param_auth.{paramId}`: `_id = "session:" + SHA256(token)`, full session fields
@@ -3123,6 +3134,7 @@ POST   /auth/otp/verify
   }
 }
 ```
+`enn` is present only when `encryptedPayload` was successfully decrypted; otherwise it is omitted.
 
 ---
 
