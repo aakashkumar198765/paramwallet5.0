@@ -1,0 +1,19 @@
+{
+  "name": "paramplatform-v2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Param Wallet 5.0 — Monorepo",
+  "scripts": {
+    "dev:backend": "pnpm --filter wallet-backend dev",
+    "dev:frontend": "pnpm --filter wallet-frontend dev",
+    "build:backend": "pnpm --filter wallet-backend build",
+    "build:frontend": "pnpm --filter wallet-frontend build",
+    "test:backend": "pnpm --filter wallet-backend test",
+    "test:frontend": "pnpm --filter wallet-frontend test",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
