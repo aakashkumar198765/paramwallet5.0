@@ -23,7 +23,7 @@ export default function DocumentList() {
 
   const smId = new URLSearchParams(location.search).get('sm') ?? '';
 
-  const { data, isLoading } = useDocuments(subdomain!, superAppId!, smId, {
+  const { data, isLoading } = useDocuments(smId, {
     subState: activeSubState ?? undefined,
     search,
     page,
@@ -59,10 +59,10 @@ export default function DocumentList() {
           </div>
 
           <DocumentTable
-            documents={data?.items ?? []}
+            documents={data?.documents ?? []}
             total={data?.total ?? 0}
             page={page}
-            totalPages={data?.totalPages ?? 1}
+            totalPages={Math.ceil((data?.total ?? 0) / 50) || 1}
             isLoading={isLoading}
             onPageChange={setPage}
             onSearch={(q) => {

@@ -13,7 +13,7 @@ export default function SuperAppInstall() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: available = [], isLoading } = useAvailableSuperApps();
-  const installMutation = useInstallSuperApp(subdomain!);
+  const installMutation = useInstallSuperApp();
 
   const handleInstall = async (superAppDefId: string, name: string) => {
     try {

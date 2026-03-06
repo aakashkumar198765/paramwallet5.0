@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { OtpRequestResponse, OtpVerifyResponse } from '@/types/auth';
+import type { OtpRequestResponse, OtpVerifyResponse, RefreshResponse } from '@/types/auth';
 import type { Profile } from '@/types/auth';
 
 export async function requestOtp(email: string): Promise<OtpRequestResponse> {
@@ -12,8 +12,8 @@ export async function verifyOtp(email: string, otp: string): Promise<OtpVerifyRe
   return res.data;
 }
 
-export async function refreshToken(token: string): Promise<OtpVerifyResponse> {
-  const res = await apiClient.post<OtpVerifyResponse>('/auth/refresh', { refreshToken: token });
+export async function refreshToken(token: string): Promise<RefreshResponse> {
+  const res = await apiClient.post<RefreshResponse>('/auth/refresh', { refreshToken: token });
   return res.data;
 }
 

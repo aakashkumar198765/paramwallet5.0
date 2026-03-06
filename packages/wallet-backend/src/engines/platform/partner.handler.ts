@@ -148,7 +148,7 @@ export async function partnerLifecycleHandler(
       { _id: `user:${userId}` as unknown as string },
       {
         $setOnInsert: { _id: `user:${userId}`, userId, email, createdAt: now } as unknown as Document,
-        $addToSet: { workspaces: workspace } as unknown as Document,
+        $addToSet: { subdomains: workspace } as unknown as Document,
         $set: { orgParamId, updatedAt: now },
       },
       { upsert: true }
@@ -174,6 +174,7 @@ export async function partnerLifecycleHandler(
           })),
           isOrgAdmin: true,
           status: 'active',
+          addedAt: now,     // HIGH-4 fix: addedAt is a required schema field per spec §9.2
           addedBy: 'system',
           updatedAt: now,
         },
@@ -213,13 +214,20 @@ export async function subscribeToPartnerLifecycle(
   workspace: string,
   superAppId: string
 ): Promise<() => void> {
-  const subject = `param.syncfactory.${workspace}.${superAppId}.create`;
-
-  return subscribe(subject, async (data: unknown) => {
+  const handler = async (data: unknown) => {
     const smDoc = data as PartnerSmDoc;
     if (smDoc.smType !== '@sm/Partner') return;
     await partnerLifecycleHandler(workspace, superAppId, smDoc);
-  });
+  };
+
+  // Spec §15.5.1: subscribe to both .create (new partners) and .transition (Partner:Inactive)
+  const unsubCreate = subscribe(`param.syncfactory.${workspace}.${superAppId}.create`, handler);
+  const unsubTransition = subscribe(`param.syncfactory.${workspace}.${superAppId}.transition`, handler);
+
+  return () => {
+    unsubCreate();
+    unsubTransition();
+  };
 }
 
 /**
@@ -309,29 +317,36 @@ export async function handlePartnerOnboardRest(
     { _id: `user:${userId}` as unknown as string },
     {
       $setOnInsert: { _id: `user:${userId}`, userId, email: orgAdmin, createdAt: now } as unknown as Document,
-      $addToSet: { workspaces: workspace } as unknown as Document,
+      $addToSet: { subdomains: workspace } as unknown as Document,
       $set: { orgParamId: org.paramId, updatedAt: now },
     },
     { upsert: true }
   );
 
-  // 4. Upsert app_users — org admin
+  // 4. Upsert app_users — org admin (upsert to prevent duplicate key on re-onboard)
   const appUserId = `user:${superAppId}:${userId}:${org.partnerId}`;
-  await sappDb.collection('app_users').insertOne({
-    _id: appUserId,
-    userId,
-    email: orgAdmin,
-    orgParamId: org.paramId,
-    superAppId,
-    role,
-    partnerId: org.partnerId,
-    plantTeams: plants.map(p => ({ plant: p.code, teams: [role] })),
-    isOrgAdmin: true,
-    status: 'active',
-    addedBy: 'admin',
-    createdAt: now,
-    updatedAt: now,
-  } as unknown as Document);
+  await sappDb.collection('app_users').updateOne(
+    { _id: appUserId as unknown as string },
+    {
+      $set: {
+        _id: appUserId,
+        userId,
+        email: orgAdmin,
+        orgParamId: org.paramId,
+        superAppId,
+        role,
+        partnerId: org.partnerId,
+        plantTeams: plants.map(p => ({ plant: p.code, teams: [role] })),
+        isOrgAdmin: true,
+        status: 'active',
+        addedAt: now,     // HIGH-4 fix: addedAt is a required schema field per spec §9.2
+        addedBy: 'admin',
+        updatedAt: now,
+      },
+      $setOnInsert: { createdAt: now } as unknown as Document,
+    },
+    { upsert: true }
+  );
 
   // Spec response: created organizations document
   return reply.status(201).send(orgDoc);

@@ -34,22 +34,57 @@ const ennClient = got.extend({
 });
 
 /**
+ * OpenSSL EVP_BytesToKey — matches CryptoJS string-passphrase key derivation.
+ * MD5, 1 iteration, derives 32-byte key + 16-byte IV.
+ */
+function evpKdf(passphrase: Buffer, salt: Buffer): { key: Buffer; iv: Buffer } {
+  let derived = Buffer.alloc(0);
+  let prev = Buffer.alloc(0);
+  while (derived.length < 48) {
+    prev = createHash('md5').update(Buffer.concat([prev, passphrase, salt])).digest();
+    derived = Buffer.concat([derived, prev]);
+  }
+  return { key: derived.slice(0, 32), iv: derived.slice(32, 48) };
+}
+
+/**
  * Decrypt ENN encrypted payload.
- * Algorithm: AES-256-CTR
- * Key: SHA256(otp)
- * IV: first 16 bytes of key
+ *
+ * Spec: decryptionKey = SHA256(otp) as 64-char hex string, passed as CryptoJS string
+ * passphrase → CryptoJS uses OpenSSL EVP_BytesToKey internally.
+ * Ciphertext format (base64): "Salted__" (8 bytes) + salt (8 bytes) + AES-256-CTR ciphertext.
  */
 export function decryptEnnPayload(encryptedPayload: string, otp: string): DecryptedEnnPayload {
-  const key = createHash('sha256').update(otp).digest();
-  const iv = key.slice(0, 16);
+  // Spec: key = SHA256(otp) as hex string (64 chars), used as CryptoJS string passphrase
+  const passphrase = Buffer.from(createHash('sha256').update(otp).digest('hex'), 'utf8');
+
+  const raw = Buffer.from(encryptedPayload, 'base64');
+
+  // CryptoJS OpenSSL format: "Salted__" (8 bytes) + random salt (8 bytes) + ciphertext
+  if (raw.length < 16 || raw.slice(0, 8).toString('ascii') !== 'Salted__') {
+    throw new Error('Unexpected ENN payload format — expected CryptoJS OpenSSL Salted__ format');
+  }
+
+  const salt = raw.slice(8, 16);
+  const ct = raw.slice(16);
+
+  const { key, iv } = evpKdf(passphrase, salt);
   const decipher = createDecipheriv('aes-256-ctr', key, iv);
-  const decrypted =
-    decipher.update(Buffer.from(encryptedPayload, 'base64')).toString('utf8') +
-    decipher.final('utf8');
+  let decryptedBuf = Buffer.concat([decipher.update(ct), decipher.final()]);
 
-  const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+  // CryptoJS applies PKCS7 padding even in CTR mode.
+  // Node.js aes-256-ctr does NOT auto-strip it — strip manually.
+  const padByte = decryptedBuf[decryptedBuf.length - 1];
+  if (padByte > 0 && padByte <= 16) {
+    const padding = decryptedBuf.slice(decryptedBuf.length - padByte);
+    if (padding.every((b) => b === padByte)) {
+      decryptedBuf = decryptedBuf.slice(0, decryptedBuf.length - padByte);
+    }
+  }
 
-  // Field mapping: ethID → paramId, paramID → pennId
+  const parsed = JSON.parse(decryptedBuf.toString('utf8')) as Record<string, unknown>;
+
+  // Field mapping: ENN's ethID → platform paramId (0x address), ENN's paramID → pennId (EHPI code)
   return {
     ...parsed,
     paramId: (parsed.ethID ?? parsed.paramId ?? '') as string,
@@ -144,15 +179,25 @@ export async function registerExchange(payload: Record<string, unknown>): Promis
       json: payload,
     });
 
-    const body = JSON.parse(response.body as string) as EnnResponse;
-    if (response.statusCode >= 500) {
-      return { success: false, message: body.message ?? 'Exchange registration failed' };
+    const body = JSON.parse(response.body as string) as Record<string, unknown>;
+    logger.debug({ status: response.statusCode, body }, 'ENN registerExchange response');
+
+    // HIGH-10 + MED-2 fix: Check body.status/body.res like all other ENN functions.
+    // ENN may return HTTP 200 with { status: false, res: 'error' } for business failures.
+    // Previously this checked HTTP status code only and returned raw body (body.success = undefined).
+    if (body.status === false || body.res === 'error') {
+      return { success: false, message: (body.message as string) ?? 'Exchange registration failed' };
     }
 
-    return body;
+    const data = body.data as Record<string, unknown> | undefined;
+    return {
+      success: true,
+      message: (body.message as string) ?? 'Exchange registered',
+      data,
+    };
   } catch (err) {
     logger.error({ err }, 'ENN registerExchange network error');
-    throw new Error('ENN_TIMEOUT');
+    return { success: false, message: 'ENN service unavailable', error: 'ENN_TIMEOUT' };
   }
 }
 

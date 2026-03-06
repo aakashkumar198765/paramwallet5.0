@@ -277,11 +277,13 @@ Two systems write to `param_definitions` during the definition phase:
 
 `POST /api/v1/superapp/install`
 
+**Body:** `{ superAppId, orgName? }` — `orgName` is optional; sets the sponsor org name in step 4 (falls back to caller's name from `subdomain_users`).
+
 Platform Manager:
 1. Reads `param_definitions.superapp_definitions` by superAppId
 2. Reads `param_definitions.team_rbac_matrix` for all linked SMs
 3. Writes `ws.installed_superapps` — workspace-level installation record
-4. Writes `sapp.organizations` — sponsor role only (one document, bound to the installing admin's org with `status: "active"`). Partner roles get no placeholder documents — they are created in Phase 3 as orgs are onboarded. Multiple orgs can be onboarded for the same partner role.
+4. Writes `sapp.organizations` — sponsor role only (one document, bound to the installing admin's org with `status: "active"`, `org.name` from `orgName` body field or caller name fallback). Partner roles get no placeholder documents — they are created in Phase 3 as orgs are onboarded. Multiple orgs can be onboarded for the same partner role.
 5. Writes `sapp.team_rbac_matrix` — full permission matrix copied from `param_definitions.team_rbac_matrix` for each linked SM (one doc per SM). Uses same collection name as the source for clarity.
 
 > **Why `organizations`?** This collection answers: "which actual organization plays which role in this SuperApp?" It's the L1 binding registry — mapping abstract role names (Consignee, FF, CHA) to real org paramIds. It is NOT about teams (teams come from `team_rbac_matrix`) and NOT about users (that's `app_users`).
@@ -303,7 +305,7 @@ This section defines all databases used by Wallet Backend and their writers. Six
 |---|---|---|---|---|
 | Definitions | `param_definitions` | Global singleton (per exchange deployment) | SyncFactory (onchain SM/schema/offchain defs) + Wallet Backend (superapp_definitions, team_rbac_matrix) | SuperApp blueprints, on-chain SM/schema definitions, offchain definitions, team RBAC matrix |
 | Domain | `param_saas` | Global singleton | Platform Manager | Workspace registry (`subdomains`), global user index (`subdomain_users`) |
-| Auth | `param_auth` | Global singleton | Wallet Backend (Auth Gate) | Session documents per org-level `paramId` |
+| Auth | `param_auth` | Global singleton | Wallet Backend (Auth Gate) | All session documents in a single `sessions` collection |
 | Workspace | `{subdomain}` | Per workspace | Platform Manager + Notification Engine | Installed superapps list, plants, workspace config, workspace-level notifications |
 | SuperApp | `{subdomain}_{superappId[0:8]}` | Per installed superapp per workspace | Platform Manager + SyncFactory (offchain) + Notification Engine | Org bindings, RBAC matrix, user assignments, offchain data, superapp-level notifications |
 | Org Partition | `{subdomain}_{superappId[0:8]}_{org[2:22]}_{portal}` | Per participating org per superapp | SyncFactory (SM docs) + Platform Manager (drafts only) | Business documents: SM states, transaction history, chain head, drafts |
@@ -781,7 +783,6 @@ One document per workspace (subdomain).
   "workspaceName": "Bosch Export-Import Platform",
   "ownerParamId": "0x6193b497...",         // owner org paramId
   "ownerOrgName": "Bosch Chassis Systems India",
-  "exchangeParamId": "0x5e282dE1...",      // which exchange this workspace is registered on
   "status": "active",                      // "active" | "suspended" | "pending"
   "createdAt": 1740484800000,
   "updatedAt": 1740484800000
@@ -1453,12 +1454,12 @@ Base path: `/api/v1`. All requests require `Authorization: Bearer <token>`, `X-P
 ```
 POST   /workspace/create
 ```
-**Body:** `{ subdomain, workspaceName, exchangeParamId }`
+**Body:** `{ subdomain, workspaceName, ownerOrgName? }`
 **Guard:** Authenticated. No RBAC (bootstrap — caller becomes first workspace admin).
 **Action:** Creates `param_saas.subdomains` entry, initializes `{subdomain}` Workspace DB.
 **Response:**
 ```json
-{ "subdomain": "bosch-exim", "workspaceName": "Bosch EXIM", "exchangeParamId": "0x...", "createdAt": 1740484800000 }
+{ "subdomain": "bosch-exim", "workspaceName": "Bosch EXIM", "createdAt": 1740484800000 }
 ```
 
 ---
@@ -1482,7 +1483,7 @@ GET    /workspace
 **Reads:** `param_saas.subdomains` where `subdomain = X-Workspace`.
 **Response:** Full `param_saas.subdomains` document for the current workspace.
 ```json
-{ "subdomain": "bosch-exim", "workspaceName": "Bosch EXIM", "exchangeParamId": "0x...", "createdAt": 1740484800000 }
+{ "subdomain": "bosch-exim", "workspaceName": "Bosch EXIM", "createdAt": 1740484800000 }
 ```
 
 ---
@@ -1493,7 +1494,7 @@ PUT    /workspace
 **Body:** `{ workspaceName }`
 **Guard:** Workspace admin.
 **Action:** Updates `workspaceName` in `param_saas.subdomains`.
-**Response:** Updated subdomains document. Same shape as GET /workspace: `{ subdomain, workspaceName, exchangeParamId, createdAt }`.
+**Response:** Updated subdomains document. Same shape as GET /workspace: `{ subdomain, workspaceName, createdAt }`.
 
 ---
 
@@ -1704,13 +1705,16 @@ PUT    /definitions/team-rbac-matrix/:superAppId/:smId
 ```
 POST   /superapp/install
 ```
-**Body:** `{ superAppId }`
+**Body:** `{ superAppId, orgName? }`
+- `superAppId` — required; must exist in `param_definitions.superapp_definitions`
+- `orgName` — optional; name for the sponsor org record created in step 4. Falls back to caller's `name` from `subdomain_users` if not provided.
+
 **Guard:** Workspace admin.
 **Action:**
 1. Read `param_definitions.superapp_definitions` by `superAppId` — get all fields (name, roles, linkedSMs, sponsor, etc.)
 2. Read `param_definitions.team_rbac_matrix` for all `linkedSMs`
 3. Write `{subdomain}.installed_superapps` — full copy of superapp_definitions + install metadata (`paramId` = caller's org, `installedAt`, `status: "active"`)
-4. Write `sapp.organizations` for the sponsor role only — `portal` derived from `superapp_definitions.sponsor`; binds caller's `paramId` with `status: "active"`
+4. Write `sapp.organizations` for the sponsor role only — `portal` derived from `superapp_definitions.sponsor`; binds caller's `paramId` with `status: "active"`; uses `orgName` (or fallback) as `org.name`
 5. Write `sapp.team_rbac_matrix` for each SM — full copy from `param_definitions.team_rbac_matrix`
 6. Append workspace to `param_saas.subdomain_users[caller.userId].subdomains` if not already present
 
@@ -2318,10 +2322,11 @@ Base path: `/api/v1`. All endpoints are **read-only**. Every response is RBAC-fi
 ```
 GET    /documents
 ```
+**Required headers:** `X-Workspace`, `X-SuperApp-ID`, `X-Portal` (role name, e.g. `Consignee`). These replace the `superAppId`, `workspace`, and `portal` context for all Query Engine endpoints — not query params.
+
 **Query params:**
 
 _System filters (always available):_
-- `superAppId` (required)
 - `smId` (optional — filter to a specific SM collection; **required** when using `filter[*]` params)
 - `state` (optional)
 - `subState` (optional)
@@ -2342,7 +2347,7 @@ _Dynamic schema field filters (see Section 16.1.1):_
 
 **Logic:**
 1. Resolve Org Partition DB: `{subdomain}_{superAppId[0:8]}_{org[2:22]}_{portal}`
-2. Determine SM collections to query from `ws.installed_superapps.linkedSMs`
+2. Discover SM collections by scanning `sm_*` collections in the org partition DB dynamically (not from `installed_superapps.linkedSMs`)
 3. L1 filter: `_chain.roles[caller.role] == caller.paramId`
 4. Plant filter: resolve caller's plants across all vendor contexts from `sapp.app_users` (see Section 22.0); keep docs where `_chain._sys.plantIDs[caller.orgParamId]` intersects caller's plants
 5. **Partner ID filter** _(vendor only, when `partner_id` is passed)_: add `{ "_participants.{callerRole}.C_InternalID": partner_id }` to the query. Sponsor users skip this filter entirely — see Section 22.6.
@@ -3014,25 +3019,93 @@ ENN response on failure (HTTP 500):
 
 **Decryption of `encryptedPayload`**
 
-Wallet Backend decrypts `encryptedPayload` using the OTP-derived key and AES-CTR. Implementation (matches `otp.handler.ts`):
+Implemented as `decryptEnnPayload(encryptedPayload, otp)` in `src/engines/auth/enn-client.ts`. Called from `otp.handler.ts` step 3.
 
-1. **Key derivation:** `decryptionKey = SHA256(otp)` as a 64-character hex string (e.g. `createHash('sha256').update(otp).digest('hex')`).
-2. **Decrypt:** AES-CTR mode (e.g. `CryptoJS.AES.decrypt(encryptedPayload, decryptionKey, { mode: CryptoJS.mode.CTR })`).
-3. **Decode:** UTF-8 stringify the decrypted bytes.
-4. **Parse:** `JSON.parse(plaintext)` to obtain the payload object.
+ENN encrypts the identity payload on their side using **CryptoJS** with a string passphrase derived from the OTP. CryptoJS internally uses OpenSSL's `EVP_BytesToKey` for key derivation and exports ciphertext in OpenSSL "Salted__" binary format. The wallet backend must reproduce the exact same key derivation to decrypt.
 
-The decrypted JSON contains:
+**Full algorithm — 6 steps:**
+
+**Step 1 — Passphrase derivation:**
+```
+passphrase = UTF-8 bytes of SHA256(otp).hexDigest()
+```
+The OTP (e.g. `qwertyui`) is hashed with SHA-256, producing a 64-character hex string (e.g. `ab3f...`). The **UTF-8 encoding of that hex string** is the passphrase passed into EVP_BytesToKey. This is how CryptoJS handles a plain string key — it does not use the SHA-256 bytes as the AES key directly.
+
+```ts
+const passphrase = Buffer.from(createHash('sha256').update(otp).digest('hex'), 'utf8');
+```
+
+**Step 2 — Parse the OpenSSL "Salted__" ciphertext format:**
+The base64-decoded ciphertext is in CryptoJS's default OpenSSL export format:
+```
+[ "Salted__" — 8 bytes ASCII ][ random salt — 8 bytes ][ AES ciphertext ]
+```
+```ts
+const raw  = Buffer.from(encryptedPayload, 'base64');
+// raw[0..7]  = "Salted__" magic header — validates format
+// raw[8..15] = random salt chosen by ENN at encryption time
+// raw[16..]  = actual AES-256-CTR ciphertext
+const salt = raw.slice(8, 16);
+const ct   = raw.slice(16);
+```
+If the magic header is absent, throw — the payload is not in expected format.
+
+**Step 3 — Key + IV derivation via OpenSSL EVP_BytesToKey:**
+CryptoJS uses OpenSSL's `EVP_BytesToKey(MD5, 1 iteration)` to derive the AES key and IV from the passphrase + salt. Node.js `crypto` does not expose this natively — it must be implemented manually:
+```ts
+function evpKdf(passphrase: Buffer, salt: Buffer): { key: Buffer; iv: Buffer } {
+  let derived = Buffer.alloc(0);
+  let prev    = Buffer.alloc(0);
+  while (derived.length < 48) {         // need 32 bytes (key) + 16 bytes (iv)
+    prev    = MD5(concat(prev, passphrase, salt));   // MD5, single iteration
+    derived = concat(derived, prev);
+  }
+  return { key: derived.slice(0, 32), iv: derived.slice(32, 48) };
+}
+```
+Output: 32-byte AES-256 key + 16-byte IV, both unique per ciphertext (because salt is random per encryption).
+
+**Step 4 — AES-256-CTR decrypt:**
+```ts
+const decipher    = createDecipheriv('aes-256-ctr', key, iv);
+let decryptedBuf  = Buffer.concat([decipher.update(ct), decipher.final()]);
+```
+
+**Step 5 — Manual PKCS7 padding removal:**
+CryptoJS applies PKCS7 padding even in CTR (stream cipher) mode — this is technically incorrect for a stream cipher but is CryptoJS default behaviour. Node.js `aes-256-ctr` does **not** auto-strip padding (unlike CBC mode), so it must be stripped manually:
+```ts
+const padByte = decryptedBuf[decryptedBuf.length - 1];
+if (padByte >= 1 && padByte <= 16) {
+  const tail = decryptedBuf.slice(-padByte);
+  if (tail.every(b => b === padByte)) {
+    decryptedBuf = decryptedBuf.slice(0, -padByte);
+  }
+}
+```
+Skipping this step causes `JSON.parse` to throw on trailing padding bytes (e.g. `\x0e\x0e...\x0e`).
+
+**Step 6 — Parse + remap field names:**
+```ts
+const parsed = JSON.parse(decryptedBuf.toString('utf8'));
+return {
+  ...parsed,
+  paramId: parsed.ethID   ?? parsed.paramId,   // ethID  → paramId  (0x address)
+  pennId:  parsed.paramID ?? parsed.pennId,    // paramID → pennId  (EHPI code)
+};
+```
+
+The decrypted JSON from ENN contains:
 ```json
 {
-  "ethID":     "0x6193b497...",   // org-level Ethereum address → stored as paramId
-  "paramID":   "EHPI1668",        // EHPI-style identifier → stored as pennId  (ENN names it "paramID" but it is the EHPI code, not the 0x address)
-  "publicKey": "<public-key>"
+  "ethID":     "0x6193b497...",
+  "paramID":   "EHPI1668",
+  "publicKey": "<hex-encoded-public-key>"
 }
 ```
 
-If `encryptedPayload` is missing or decryption fails (invalid ciphertext, wrong OTP, etc.), the backend returns `null` and the response omits the `enn` object — the client receives `token`, `refreshToken`, `user`, etc., but no `enn` block.
+> **ENN naming note:** ENN's `ethID` is the user's Ethereum wallet address → platform calls it `paramId`. ENN's `paramID` is the EHPI (Param Hyperplane Identity) code → platform calls it `pennId`. These names are swapped intentionally to match platform conventions.
 
-> **ENN naming note:** ENN's `ethID` maps to what the platform calls `paramId` (the 0x address). ENN's `paramID` maps to what the platform calls `pennId` (the EHPI code). These field names differ intentionally in the platform to avoid confusion.
+**Failure handling:** If `encryptedPayload` is absent or decryption throws (wrong OTP, malformed ciphertext, JSON parse failure), the error is logged as a warning and `decryptedEnn` is set to `null`. The login still succeeds — `paramId` falls back to `ennResult.ethID` from the unencrypted response fields. The `enn` block is simply omitted from the response.
 
 ---
 
@@ -3159,11 +3232,11 @@ POST   /auth/otp/verify
 **Action:**
 1. Call ENN `/v2/verify_otp` with `{ email, otp }`. ENN creates blockchain identity for first-time users during this step — no separate register call needed.
 2. If `ennResult.status = false` → 401
-3. Decrypt `encryptedPayload` using `SHA256(otp)` as hex key + AES-CTR (see decryption steps above) → extract `ethID`, `paramID`, `publicKey`
+3. Call `decryptEnnPayload(ennResult.encryptedPayload, otp)` (`enn-client.ts`) → AES-256-CTR with EVP_BytesToKey(SHA256(otp) hex string, Salted__ salt) → extract `ethID` → `paramId`, `paramID` → `pennId`, `publicKey` (see §17.0 Decryption of encryptedPayload for full algorithm)
 4. Look up user in `param_saas.subdomain_users` by `email`. Resolve `paramId` in this order: (a) `user.paramId` if user exists, (b) `ethID` from decrypted payload, (c) `ennResult.paramId` (legacy fallback). If none available → 502 "Session creation failed"
 5. `userId = SHA256(email.toLowerCase())`
 6. Generate JWT token: `{ userId, email, paramId, exp }` + UUID refresh token
-7. Store session in `param_auth.{paramId}`: `_id = "session:" + SHA256(token)`, full session fields
+7. Store session in `param_auth.sessions`: `_id = "session:" + SHA256(token)`, full session fields
 8. Return response (raw `encryptedPayload` never returned to client)
 
 **Response:**
@@ -3201,7 +3274,7 @@ POST   /auth/sso/:provider
 4. Get `email` from ENN response — 401 if empty
 5. `paramId` = `ennResult.paramId` || fallback to `param_saas.subdomain_users[email].paramId`
 6. `userId = SHA256(email.toLowerCase())`
-7. Generate JWT + refresh token, store session in `param_auth.{paramId}`
+7. Generate JWT + refresh token, store session in `param_auth.sessions`
 
 **Response:** (different from OTP — no `enn` wrapper, no `isTermsAndConditionVerified` as ENN does not return these for SSO)
 ```json
@@ -3226,7 +3299,7 @@ POST   /auth/refresh
 ```
 **Headers:** `X-Param-ID: {paramId}` (required)
 **Body:** `{ "refreshToken": "<uuid>" }`
-**Action:** Find session by `refreshToken` in `param_auth.{paramId}`. If expired → delete + 401. Otherwise: generate new token pair, insert new session document (new `_id = "session:" + SHA256(newToken)`), delete old session document. No ENN call.
+**Action:** Find session by `refreshToken` in `param_auth.sessions`. If expired → delete + 401. Otherwise: generate new token pair, insert new session document (new `_id = "session:" + SHA256(newToken)`), delete old session document. No ENN call.
 **Response:**
 ```json
 {
@@ -3247,7 +3320,7 @@ POST   /auth/refresh
 POST   /auth/logout
 ```
 **Headers:** `Authorization: Bearer <token>`, `X-Param-ID: {paramId}`
-**Action:** Deletes session where `_id = "session:" + SHA256(token)` from `param_auth.{paramId}`. Always returns success even if session was already missing or expired.
+**Action:** Deletes session where `_id = "session:" + SHA256(token)` from `param_auth.sessions`. Always returns success even if session was already missing or expired.
 **Response:** `{ "status": "logged_out" }`
 
 ---
@@ -3257,7 +3330,7 @@ POST   /auth/addapp
 ```
 **Headers:** `Authorization: Bearer <token>`, `X-Param-ID: {paramId}`
 **Body:** `{ appId, publicKey, keystoreData? }`
-**Guard:** Valid active session (validates Bearer token against `param_auth.{paramId}`).
+**Guard:** Valid active session (validates Bearer token against `param_auth.sessions`).
 **Action:** Validates session, then calls ENN `/v2/register_exchange` to register the app exchange for gPRM + SyncFactory keystores.
 **Response:** `{ "status": "registered", "exchangeId": "..." }`
 
@@ -3498,7 +3571,7 @@ HTTP Request
     │
     ▼
 onRequest: authMiddleware
-    │  reads: param_auth.{paramId} → validate session token
+    │  reads: param_auth.sessions → validate session token
     │  sets: request.authContext = {
     │    paramId,        // from X-Param-ID — caller's org Param ID
     │    workspace,      // from X-Workspace

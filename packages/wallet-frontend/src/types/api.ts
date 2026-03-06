@@ -5,11 +5,11 @@ export interface ApiResponse<T> {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
+  documents?: T[];
+  records?: T[];
   total: number;
   page: number;
   limit: number;
-  totalPages: number;
 }
 
 export interface ApiError {

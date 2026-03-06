@@ -93,8 +93,8 @@ export async function handleOtpVerify(
   const sessionId = `session:${tokenHash}`;
 
   const authDb = getDb(resolveAuthDb());
-  const sessionCol = authDb.collection(paramId);
-  await ensureAuthSessionIndexes(paramId);
+  const sessionCol = authDb.collection('sessions');
+  await ensureAuthSessionIndexes();
 
   const now = Date.now();
   const expiresAt = now + config.JWT_EXPIRES_IN * 1000;
@@ -111,7 +111,12 @@ export async function handleOtpVerify(
     expiresAt,
     createdAt: now,
     lastActiveAt: now,
-    deviceInfo: body.deviceId ? { deviceId: body.deviceId } : null,
+    // Spec §12: deviceInfo = { ua, ip } — capture from HTTP request headers
+    deviceInfo: {
+      ua: (request.headers['user-agent'] as string) ?? null,
+      ip: request.ip ?? null,
+      ...(body.deviceId ? { deviceId: body.deviceId } : {}),
+    },
   } as unknown as Document);
 
   // Step 8: Return response — enn block only when decrypted successfully

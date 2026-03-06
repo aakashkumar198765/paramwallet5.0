@@ -5,6 +5,7 @@ import { getDb } from '../../db/mongo.js';
 import { resolveSuperAppDbName, resolveWorkspaceDb, resolveDomainDb } from '../../db/resolver.js';
 import { CreateUsersSchema, UpdateUserSchema } from './schemas.js';
 import type { RequestContext } from '../../middleware/request-context.js';
+import type { AuthContext } from '../../middleware/auth.js';
 
 interface UserParams { superAppId: string }
 interface UserRoleParams extends UserParams { role: string }
@@ -46,6 +47,7 @@ export async function createUsers(
   const body = CreateUsersSchema.parse(request.body);
   const req = request as FastifyRequest<{ Params: UserRoleParams }> & {
     requestContext: RequestContext;
+    authContext: AuthContext;
   };
   const { workspace } = req.requestContext;
   if (!workspace) return reply.status(400).send({ error: 'X-Workspace header required' });
@@ -56,18 +58,21 @@ export async function createUsers(
   const saasDb = getDb(resolveDomainDb());
   const now = Date.now();
 
-  // Validate all plants exist
+  // Validate all plants exist (use "plant:{code}" prefix format per spec §8.2)
   const allPlantCodes = [
     ...new Set(body.users.flatMap(u => u.plantTeams.map(pt => pt.plant))),
   ];
 
   if (allPlantCodes.length > 0) {
+    const prefixedCodes = allPlantCodes.map(c => `plant:${c}`);
     const existingPlants = await wsDb
       .collection('plants')
-      .find({ _id: { $in: allPlantCodes as unknown[] }, isActive: { $ne: false } })
+      .find({ _id: { $in: prefixedCodes as unknown[] }, isActive: { $ne: false } })
       .toArray();
 
-    const existingCodes = new Set(existingPlants.map(p => (p as Record<string, unknown>)._id as string));
+    const existingCodes = new Set(
+      existingPlants.map(p => ((p as Record<string, unknown>)._id as string).replace(/^plant:/, ''))
+    );
     const missingPlants = allPlantCodes.filter(c => !existingCodes.has(c));
 
     if (missingPlants.length > 0) {
@@ -75,12 +80,46 @@ export async function createUsers(
     }
   }
 
+  // Validate teams against sapp.team_rbac_matrix per spec §15.6
+  const allTeams = [...new Set(body.users.flatMap(u => u.plantTeams.flatMap(pt => pt.teams)))];
+  if (allTeams.length > 0) {
+    const rbacDocs = await sappDb.collection('team_rbac_matrix').find({ superAppId }).toArray();
+    if (rbacDocs.length > 0) {
+      const validTeams = new Set<string>();
+      for (const rbacDoc of rbacDocs) {
+        const permissions = (rbacDoc as Record<string, unknown>).permissions as Array<Record<string, unknown>> | undefined;
+        if (permissions) {
+          for (const perm of permissions) {
+            const access = perm.access as Record<string, string> | undefined;
+            if (access) {
+              for (const key of Object.keys(access)) {
+                const dotIdx = key.indexOf('.');
+                if (dotIdx > -1 && key.slice(0, dotIdx) === role) {
+                  validTeams.add(key.slice(dotIdx + 1));
+                }
+              }
+            }
+          }
+        }
+      }
+      if (validTeams.size > 0) {
+        const invalidTeams = allTeams.filter(t => !validTeams.has(t));
+        if (invalidTeams.length > 0) {
+          return reply.status(400).send({ error: 'Invalid teams for role', invalidTeams });
+        }
+      }
+    }
+  }
+
   // Create app_users docs — backend computes userId = SHA256(email)
+  // HIGH-5 fix: use vendor _id format "user:{superAppId}:{userId}:{partnerId}" when partnerId provided
+  const { partnerId } = body;
   const created: Document[] = [];
   for (const user of body.users) {
     const userId = createHash('sha256').update(user.email.toLowerCase()).digest('hex');
-    // Sponsor _id: "user:{superAppId}:{userId}" (no partnerId)
-    const docId = `user:${superAppId}:${userId}`;
+    const docId = partnerId
+      ? `user:${superAppId}:${userId}:${partnerId}`
+      : `user:${superAppId}:${userId}`;
 
     const doc = {
       _id: docId,
@@ -89,9 +128,13 @@ export async function createUsers(
       name: user.name ?? null,
       superAppId,
       role,
+      orgParamId: req.authContext.paramId,
+      ...(partnerId ? { partnerId } : {}),
       plantTeams: user.plantTeams,
       isOrgAdmin: user.isOrgAdmin,
       status: 'active',
+      addedAt: now,
+      addedBy: req.authContext.paramId,
       createdAt: now,
       updatedAt: now,
     };
@@ -102,11 +145,12 @@ export async function createUsers(
       { upsert: true }
     );
 
-    // Append workspace to subdomain_users
+    // Append workspace to subdomain_users with correct _id: "user:{userId}" format
+    const subdUserDocId = `user:${userId}`;
     await saasDb.collection('subdomain_users').updateOne(
-      { userId },
+      { _id: subdUserDocId as unknown as string },
       {
-        $setOnInsert: { userId, email: user.email, createdAt: now } as unknown as Document,
+        $setOnInsert: { _id: subdUserDocId, userId, email: user.email, createdAt: now } as unknown as Document,
         $addToSet: { subdomains: workspace } as unknown as Document,
         $set: { updatedAt: now },
       },

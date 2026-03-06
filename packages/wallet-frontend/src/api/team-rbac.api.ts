@@ -1,75 +1,68 @@
 import apiClient from './client';
 import type { TeamRbacMatrix } from '@/types/definitions';
 
-export async function listRbacMatrices(subdomain: string, superAppId: string): Promise<TeamRbacMatrix[]> {
+// ── Workspace-level RBAC (installed SuperApp) ────────────────────────────────
+// Uses X-Workspace header
+
+export async function listRbacMatrices(superAppId: string): Promise<TeamRbacMatrix[]> {
   const res = await apiClient.get<TeamRbacMatrix[]>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/rbac`
+    `/superapp/${superAppId}/team-rbac-matrix`
   );
   return res.data;
 }
 
-export async function getRbacMatrix(
-  subdomain: string,
-  superAppId: string,
-  matrixId: string
-): Promise<TeamRbacMatrix> {
+export async function getRbacMatrix(superAppId: string, smId: string): Promise<TeamRbacMatrix> {
   const res = await apiClient.get<TeamRbacMatrix>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/rbac/${matrixId}`
-  );
-  return res.data;
-}
-
-export async function createRbacMatrix(
-  subdomain: string,
-  superAppId: string,
-  data: Omit<TeamRbacMatrix, '_id'>
-): Promise<TeamRbacMatrix> {
-  const res = await apiClient.post<TeamRbacMatrix>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/rbac`,
-    data
+    `/superapp/${superAppId}/team-rbac-matrix/${smId}`
   );
   return res.data;
 }
 
 export async function updateRbacMatrix(
-  subdomain: string,
   superAppId: string,
-  matrixId: string,
+  smId: string,
   data: Partial<TeamRbacMatrix>
 ): Promise<TeamRbacMatrix> {
   const res = await apiClient.put<TeamRbacMatrix>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/rbac/${matrixId}`,
+    `/superapp/${superAppId}/team-rbac-matrix/${smId}`,
     data
   );
   return res.data;
 }
 
-// Definitions-level RBAC (for SuperApp definitions)
-export async function listDefinitionRbacMatrices(superAppDefId: string): Promise<TeamRbacMatrix[]> {
-  const res = await apiClient.get<TeamRbacMatrix[]>(`/definitions/superapps/${superAppDefId}/rbac`);
+// ── Definitions-level RBAC (SuperApp definition) ─────────────────────────────
+
+export async function listDefinitionRbacMatrices(superAppId: string): Promise<TeamRbacMatrix[]> {
+  const res = await apiClient.get<TeamRbacMatrix[]>(
+    `/definitions/team-rbac-matrix/${superAppId}`
+  );
   return res.data;
 }
 
-export async function getDefinitionRbacMatrix(superAppDefId: string, matrixId: string): Promise<TeamRbacMatrix> {
-  const res = await apiClient.get<TeamRbacMatrix>(`/definitions/superapps/${superAppDefId}/rbac/${matrixId}`);
+export async function getDefinitionRbacMatrix(
+  superAppId: string,
+  smId: string
+): Promise<TeamRbacMatrix> {
+  const res = await apiClient.get<TeamRbacMatrix>(
+    `/definitions/team-rbac-matrix/${superAppId}/${smId}`
+  );
   return res.data;
 }
 
 export async function createDefinitionRbacMatrix(
-  superAppDefId: string,
   data: Omit<TeamRbacMatrix, '_id'>
 ): Promise<TeamRbacMatrix> {
-  const res = await apiClient.post<TeamRbacMatrix>(`/definitions/superapps/${superAppDefId}/rbac`, data);
+  const res = await apiClient.post<TeamRbacMatrix>('/definitions/team-rbac-matrix', data);
   return res.data;
 }
 
 export async function updateDefinitionRbacMatrix(
-  superAppDefId: string,
-  matrixId: string,
+  superAppId: string,
+  smId: string,
   data: Partial<TeamRbacMatrix>
 ): Promise<TeamRbacMatrix> {
   const res = await apiClient.put<TeamRbacMatrix>(
-    `/definitions/superapps/${superAppDefId}/rbac/${matrixId}`,
+    `/definitions/team-rbac-matrix/${superAppId}/${smId}`,
     data
   );
   return res.data;

@@ -5,7 +5,7 @@ import { z } from 'zod';
 export const CreateWorkspaceSchema = z.object({
   subdomain: z.string().min(3).max(63).regex(/^[a-z0-9-]+$/),
   workspaceName: z.string().min(1),
-  exchangeParamId: z.string().min(1),
+  ownerOrgName: z.string().optional(),
 });
 
 export const UpdateWorkspaceSchema = z.object({
@@ -57,6 +57,8 @@ export const UpdateSuperAppDefinitionSchema = CreateSuperAppDefinitionSchema.par
 
 export const InstallSuperAppSchema = z.object({
   superAppId: z.string().min(1),
+  // MED-10/LOW-2 fix: caller provides sponsor org name so organizations doc has correct name
+  orgName: z.string().optional(),
   config: z.record(z.unknown()).optional(),
 });
 
@@ -94,6 +96,8 @@ export const UpdateOrgStatusSchema = z.object({
 // ── User ─────────────────────────────────────────────────────────────────────
 
 export const CreateUsersSchema = z.object({
+  // HIGH-5 fix: partnerId for vendor roles — generates "user:{sApp}:{userId}:{partnerId}" _id format
+  partnerId: z.string().optional(),
   users: z.array(
     z.object({
       email: z.string().email(),

@@ -1,7 +1,8 @@
 import apiClient from './client';
 import type { SuperAppDefinition, SmDefinition, SchemaDefinition } from '@/types/definitions';
 
-// SuperApp definitions
+// ── SuperApp definitions ─────────────────────────────────────────────────────
+
 export async function listSuperAppDefs(): Promise<SuperAppDefinition[]> {
   const res = await apiClient.get<SuperAppDefinition[]>('/definitions/superapps');
   return res.data;
@@ -22,86 +23,50 @@ export async function updateSuperAppDef(id: string, data: Partial<SuperAppDefini
   return res.data;
 }
 
-// Onchain SM definitions
+// ── Onchain SM definitions ───────────────────────────────────────────────────
+
 export async function listOnchainSMs(): Promise<SmDefinition[]> {
-  const res = await apiClient.get<SmDefinition[]>('/definitions/onchain/sm');
+  const res = await apiClient.get<SmDefinition[]>('/definitions/sm');
   return res.data;
 }
 
-export async function getOnchainSM(id: string): Promise<SmDefinition> {
-  const res = await apiClient.get<SmDefinition>(`/definitions/onchain/sm/${id}`);
+export async function getOnchainSM(smId: string): Promise<SmDefinition> {
+  const res = await apiClient.get<SmDefinition>(`/definitions/sm/${smId}`);
   return res.data;
 }
 
-export async function createOnchainSM(data: Omit<SmDefinition, '_id'>): Promise<SmDefinition> {
-  const res = await apiClient.post<SmDefinition>('/definitions/onchain/sm', data);
+export async function getOnchainSMStates(smId: string): Promise<SmDefinition['states']> {
+  const res = await apiClient.get<SmDefinition['states']>(`/definitions/sm/${smId}/states`);
   return res.data;
 }
 
-export async function updateOnchainSM(id: string, data: Partial<SmDefinition>): Promise<SmDefinition> {
-  const res = await apiClient.put<SmDefinition>(`/definitions/onchain/sm/${id}`, data);
-  return res.data;
-}
+// ── Onchain Schema definitions ───────────────────────────────────────────────
 
-// Onchain Schema definitions
 export async function listOnchainSchemas(): Promise<SchemaDefinition[]> {
-  const res = await apiClient.get<SchemaDefinition[]>('/definitions/onchain/schema');
+  const res = await apiClient.get<SchemaDefinition[]>('/definitions/schemas');
   return res.data;
 }
 
-export async function getOnchainSchema(id: string): Promise<SchemaDefinition> {
-  const res = await apiClient.get<SchemaDefinition>(`/definitions/onchain/schema/${id}`);
+export async function getOnchainSchema(schemaId: string): Promise<SchemaDefinition> {
+  const res = await apiClient.get<SchemaDefinition>(`/definitions/schemas/${schemaId}`);
   return res.data;
 }
 
-export async function createOnchainSchema(data: Omit<SchemaDefinition, '_id'>): Promise<SchemaDefinition> {
-  const res = await apiClient.post<SchemaDefinition>('/definitions/onchain/schema', data);
-  return res.data;
-}
+// ── Offchain SM definitions ──────────────────────────────────────────────────
 
-export async function updateOnchainSchema(id: string, data: Partial<SchemaDefinition>): Promise<SchemaDefinition> {
-  const res = await apiClient.put<SchemaDefinition>(`/definitions/onchain/schema/${id}`, data);
-  return res.data;
-}
-
-// Offchain SM definitions
 export async function listOffchainSMs(): Promise<SmDefinition[]> {
-  const res = await apiClient.get<SmDefinition[]>('/definitions/offchain/sm');
+  const res = await apiClient.get<SmDefinition[]>('/definitions/offchain-sm');
   return res.data;
 }
 
 export async function getOffchainSM(id: string): Promise<SmDefinition> {
-  const res = await apiClient.get<SmDefinition>(`/definitions/offchain/sm/${id}`);
+  const res = await apiClient.get<SmDefinition>(`/definitions/offchain-sm/${id}`);
   return res.data;
 }
 
-export async function createOffchainSM(data: Omit<SmDefinition, '_id'>): Promise<SmDefinition> {
-  const res = await apiClient.post<SmDefinition>('/definitions/offchain/sm', data);
-  return res.data;
-}
-
-export async function updateOffchainSM(id: string, data: Partial<SmDefinition>): Promise<SmDefinition> {
-  const res = await apiClient.put<SmDefinition>(`/definitions/offchain/sm/${id}`, data);
-  return res.data;
-}
-
-// Offchain Schema definitions
-export async function listOffchainSchemas(): Promise<SchemaDefinition[]> {
-  const res = await apiClient.get<SchemaDefinition[]>('/definitions/offchain/schema');
-  return res.data;
-}
+// ── Offchain Schema definitions ──────────────────────────────────────────────
 
 export async function getOffchainSchema(id: string): Promise<SchemaDefinition> {
-  const res = await apiClient.get<SchemaDefinition>(`/definitions/offchain/schema/${id}`);
-  return res.data;
-}
-
-export async function createOffchainSchema(data: Omit<SchemaDefinition, '_id'>): Promise<SchemaDefinition> {
-  const res = await apiClient.post<SchemaDefinition>('/definitions/offchain/schema', data);
-  return res.data;
-}
-
-export async function updateOffchainSchema(id: string, data: Partial<SchemaDefinition>): Promise<SchemaDefinition> {
-  const res = await apiClient.put<SchemaDefinition>(`/definitions/offchain/schema/${id}`, data);
+  const res = await apiClient.get<SchemaDefinition>(`/definitions/offchain-schemas/${id}`);
   return res.data;
 }

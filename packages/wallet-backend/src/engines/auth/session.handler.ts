@@ -25,7 +25,7 @@ export async function handleRefreshToken(
   }
 
   const authDb = getDb(resolveAuthDb());
-  const sessionCol = authDb.collection(paramId);
+  const sessionCol = authDb.collection('sessions');
 
   const session = await sessionCol.findOne({ refreshToken: body.refreshToken });
 
@@ -59,7 +59,7 @@ export async function handleRefreshToken(
   const now = Date.now();
   const expiresAt = now + config.JWT_EXPIRES_IN * 1000;
 
-  await ensureAuthSessionIndexes(paramId);
+  await ensureAuthSessionIndexes();
 
   await sessionCol.insertOne({
     _id: sessionId,
@@ -100,7 +100,7 @@ export async function handleLogout(
   const sessionId = `session:${tokenHash}`;
 
   const authDb = getDb(resolveAuthDb());
-  const sessionCol = authDb.collection(paramId);
+  const sessionCol = authDb.collection('sessions');
 
   await sessionCol.deleteOne({ _id: sessionId as unknown as string });
 

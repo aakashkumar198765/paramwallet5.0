@@ -114,7 +114,18 @@ export async function getOffchainRegistryItem(
   }
 
   const { collectionName, keyValue } = request.params;
-  const keyField = (request.query as { keyField?: string }).keyField ?? '_id';
+
+  // Spec §16.3: keyField derived from offchain_sm_definitions.states[collectionName].keyField
+  const defsDb = getDb(resolveDefinitionsDb());
+  let keyField = '_id';
+  const smDoc = await defsDb
+    .collection('offchain_sm_definitions')
+    .findOne({ [`states.${collectionName}`]: { $exists: true } });
+  if (smDoc) {
+    const stDef = ((smDoc as Record<string, unknown>).states as Record<string, Record<string, unknown>> | undefined)?.[collectionName];
+    if (stDef?.keyField) keyField = stDef.keyField as string;
+  }
+
   const sappDb = getDb(superAppDbName);
 
   const doc = await sappDb

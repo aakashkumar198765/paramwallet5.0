@@ -7,6 +7,7 @@ import {
 import {
   resolveAppUserContext,
   resolveDocumentAccess,
+  passesL1,
   AppUser,
 } from './rbac-filter.js';
 import type { AuthContext } from '../../middleware/auth.js';
@@ -61,8 +62,17 @@ export async function getDocumentChain(
 
   if (!parentDoc) return reply.status(404).send({ error: 'Document not found' });
 
-  // RBAC check
+  // HIGH-11 fix: Full L1+L2+L3 RBAC check (previously only checked app_users existence)
   const sappDb = getDb(superAppDbName!);
+  const docSmId = (parentDoc._chain as Record<string, unknown>)?.smId as string | undefined;
+  let teamRbacMatrix: Record<string, unknown> | null = null;
+  if (docSmId) {
+    const rbacId = `${superAppId.slice(0, 8)}:${docSmId}`;
+    teamRbacMatrix = await sappDb
+      .collection('team_rbac_matrix')
+      .findOne({ _id: rbacId as unknown as string }) as Record<string, unknown> | null;
+  }
+
   const appUserDoc = await resolveAppUserContext(
     sappDb.collection('app_users'),
     req.authContext.userId,
@@ -72,6 +82,16 @@ export async function getDocumentChain(
   );
 
   if (!appUserDoc) return reply.status(403).send({ error: 'Access denied' });
+
+  if (teamRbacMatrix) {
+    const access = resolveDocumentAccess(parentDoc, appUserDoc as AppUser, teamRbacMatrix, callerOrgParamId);
+    if (!access) return reply.status(403).send({ error: 'Access denied' });
+  } else {
+    // No RBAC matrix — at minimum enforce L1
+    if (!passesL1(parentDoc, callerOrgParamId)) {
+      return reply.status(403).send({ error: 'Access denied' });
+    }
+  }
 
   // Get txn_history for this document, ordered by sequence asc
   const txnHistory = await orgDb
@@ -292,6 +312,115 @@ export async function getDocumentDiff(
       access,
       diff: diffBlock,
     });
+  }
+}
+
+// ── Exported helper for include_diff in listDocuments ────────────────────────
+
+export interface DiffBlock {
+  hasOrderedItems: boolean;
+  parentQty: number | null;
+  consumedQty: number | null;
+  remainingQty: number | null;
+  canCreateChild: boolean;
+  items: Array<{ I_SKU: string; parentQty: number; consumedQty: number; remainingQty: number }>;
+  children: Array<{ docId: string; stateTo: string | null; consumedQty: number | null }>;
+}
+
+export interface DiffBlockResult {
+  diff: DiffBlock;
+  reducedOrderedItems?: Array<Record<string, unknown>>;
+}
+
+/**
+ * HIGH-7 helper: Compute the diff block for a single document.
+ * Extracted so listDocuments can call it per-doc when include_diff=true.
+ */
+export async function computeDiffBlock(
+  doc: Record<string, unknown>,
+  orgDb: ReturnType<typeof getDb>,
+  foundCollection: string
+): Promise<DiffBlockResult> {
+  const chain = doc._chain as Record<string, unknown> | undefined;
+  const childDocIds: string[] = ((chain?.refs as Record<string, unknown>)?.docIds as string[]) ?? [];
+  const parentOrderedItems = getOrderedItems(doc);
+  const hasOrderedItems = parentOrderedItems.length > 0;
+
+  if (hasOrderedItems) {
+    const remaining = new Map<string, number>();
+    for (const item of parentOrderedItems) {
+      const sku = item.I_SKU as string;
+      const qty = (item.I_Quantity as number) ?? 0;
+      if (sku) remaining.set(sku, (remaining.get(sku) ?? 0) + qty);
+    }
+
+    const childDetails: Array<{ docId: string; stateTo: string | null; consumedQty: number }> = [];
+    for (const childDocId of childDocIds) {
+      const childDoc = await orgDb
+        .collection(foundCollection)
+        .findOne({ _id: childDocId as unknown as string }) as Record<string, unknown> | null;
+      const childChainHead = await orgDb
+        .collection('chain_head')
+        .findOne({ _id: childDocId as unknown as string }) as Record<string, unknown> | null;
+      const childStateTo = (childChainHead?.stateTo as string) ?? null;
+      let childConsumedQty = 0;
+      if (childDoc) {
+        for (const item of getOrderedItems(childDoc)) {
+          const sku = item.I_SKU as string;
+          const qty = (item.I_Quantity as number) ?? 0;
+          if (sku && remaining.has(sku)) {
+            remaining.set(sku, (remaining.get(sku) ?? 0) - qty);
+            childConsumedQty += qty;
+          }
+        }
+      }
+      childDetails.push({ docId: childDocId, stateTo: childStateTo, consumedQty: childConsumedQty });
+    }
+
+    const diffItems = parentOrderedItems.map(item => {
+      const sku = item.I_SKU as string;
+      const parentQty = (item.I_Quantity as number) ?? 0;
+      const rem = remaining.get(sku) ?? 0;
+      return { I_SKU: sku, parentQty, consumedQty: parentQty - rem, remainingQty: rem };
+    });
+    const parentQtyTotal = diffItems.reduce((s, i) => s + i.parentQty, 0);
+    const remainingQtyTotal = diffItems.reduce((s, i) => s + i.remainingQty, 0);
+
+    return {
+      diff: {
+        hasOrderedItems: true,
+        parentQty: parentQtyTotal,
+        consumedQty: parentQtyTotal - remainingQtyTotal,
+        remainingQty: remainingQtyTotal,
+        canCreateChild: remainingQtyTotal > 0,
+        items: diffItems,
+        children: childDetails,
+      },
+      reducedOrderedItems: parentOrderedItems.map(item => ({
+        ...item,
+        I_Quantity: remaining.get(item.I_SKU as string) ?? 0,
+      })),
+    };
+  } else {
+    const childDetails = await Promise.all(
+      childDocIds.map(async childDocId => {
+        const ch = await orgDb
+          .collection('chain_head')
+          .findOne({ _id: childDocId as unknown as string }) as Record<string, unknown> | null;
+        return { docId: childDocId, stateTo: (ch?.stateTo as string) ?? null, consumedQty: null };
+      })
+    );
+    return {
+      diff: {
+        hasOrderedItems: false,
+        parentQty: null,
+        consumedQty: null,
+        remainingQty: null,
+        canCreateChild: childDocIds.length === 0,
+        items: [],
+        children: childDetails,
+      },
+    };
   }
 }
 

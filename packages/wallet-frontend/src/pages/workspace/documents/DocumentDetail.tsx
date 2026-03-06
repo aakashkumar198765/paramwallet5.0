@@ -29,10 +29,10 @@ export default function DocumentDetail() {
 
   const smId = new URLSearchParams(location.search).get('sm') ?? '';
 
-  const { data: doc, isLoading: docLoading } = useDocument(subdomain!, superAppId!, smId, docId!);
-  const { data: actions } = useActions(subdomain!, superAppId!, smId, docId!);
-  const { data: diff, isLoading: diffLoading } = useDiff(subdomain!, superAppId!, smId, docId!);
-  const transition = useTransitionDocument(subdomain!, superAppId!, smId, docId!);
+  const { data: doc, isLoading: docLoading } = useDocument(docId!);
+  const { data: actions } = useActions(docId!);
+  const { data: diff, isLoading: diffLoading } = useDiff(docId!);
+  const transition = useTransitionDocument(docId!);
 
   const handleAction = async (action: DocumentAction) => {
     try {
@@ -126,10 +126,10 @@ export default function DocumentDetail() {
             <div className="rounded-lg border p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Roles</p>
               <div className="space-y-1">
-                {Object.entries(doc._chain.roles).map(([role, info]) => (
+                {Object.entries(doc._chain.roles).map(([role, paramId]) => (
                   <div key={role} className="flex items-center justify-between text-sm">
                     <span className="font-medium">{role}</span>
-                    <span className="text-muted-foreground">{info.name} ({info.paramId})</span>
+                    <span className="font-mono text-xs text-muted-foreground">{String(paramId)}</span>
                   </div>
                 ))}
               </div>

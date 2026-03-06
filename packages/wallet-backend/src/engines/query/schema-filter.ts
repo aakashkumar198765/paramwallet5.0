@@ -11,9 +11,23 @@ export interface SchemaProperty {
   description?: string;
 }
 
+export type FilterOperator = 'exact' | 'gte' | 'lte' | 'contains' | 'in';
+
+export interface ParsedFilterParam {
+  field: string;
+  operator: FilterOperator;
+  value: string;
+}
+
+/** Validate result: either valid parsed params, or an error to return 400. */
+export type FilterValidationResult =
+  | { ok: true; params: ParsedFilterParam[] }
+  | { ok: false; error: string; field: string };
+
 /**
  * Walk a schema's properties tree and build a Set of all valid field paths.
- * Handles nested objects and arrays.
+ * MED-7 fix: Also adds plain paths (without []) so filter[OrderedItems.I_SKU] matches
+ * whitelist entry OrderedItems[].I_SKU. Both forms stored for grouping + lookup.
  */
 export function buildFieldWhitelist(
   schema: Record<string, unknown>,
@@ -28,26 +42,63 @@ export function buildFieldWhitelist(
 
     // Recurse into nested objects
     if (prop.properties) {
-      const nested = buildFieldWhitelist(
-        prop as Record<string, unknown>,
-        fieldPath
-      );
+      const nested = buildFieldWhitelist(prop as Record<string, unknown>, fieldPath);
       for (const f of nested) whitelist.add(f);
     }
 
     // Recurse into array item objects
     if (prop.items?.properties) {
       const arrayItemPrefix = `${fieldPath}[]`;
-      const nested = buildFieldWhitelist(
-        prop.items as Record<string, unknown>,
-        arrayItemPrefix
-      );
+      const nested = buildFieldWhitelist(prop.items as Record<string, unknown>, arrayItemPrefix);
       whitelist.add(arrayItemPrefix);
-      for (const f of nested) whitelist.add(f);
+      for (const f of nested) {
+        whitelist.add(f);
+        // Also add the plain (no []) path so filter[Field.SubField] matches
+        whitelist.add(f.replace(`${arrayItemPrefix}.`, `${fieldPath}.`));
+      }
     }
   }
 
   return whitelist;
+}
+
+/**
+ * HIGH-8 + HIGH-9 fix: Parse and validate raw query entries matching filter[path] or filter[path][op].
+ * Returns 400 error info if any field is a system field (_prefix) or not in the whitelist.
+ * Operators: gte, lte, contains, in — plus no operator = exact match.
+ */
+export function parseAndValidateFilterParams(
+  rawQuery: Record<string, string>,
+  whitelist: Set<string>
+): FilterValidationResult {
+  const params: ParsedFilterParam[] = [];
+  const OPS = new Set(['gte', 'lte', 'contains', 'in']);
+  // Matches: filter[path] or filter[path][op]
+  const RE = /^filter\[([^\]]+)\](?:\[([^\]]+)\])?$/;
+
+  for (const [k, value] of Object.entries(rawQuery)) {
+    const m = k.match(RE);
+    if (!m) continue;
+
+    const field = m[1];
+    const opRaw = m[2] ?? '';
+    const operator: FilterOperator = (OPS.has(opRaw) ? opRaw : 'exact') as FilterOperator;
+
+    // Reject system fields
+    if (field.startsWith('_')) {
+      return { ok: false, error: 'Filter on system fields is not allowed', field };
+    }
+
+    // Reject unknown fields (normalize: strip [] for lookup)
+    const lookupField = field.replace(/\[\]/g, '');
+    if (!whitelist.has(lookupField) && !whitelist.has(field)) {
+      return { ok: false, error: 'Unknown schema field', field };
+    }
+
+    params.push({ field, operator, value });
+  }
+
+  return { ok: true, params };
 }
 
 /**
@@ -140,42 +191,87 @@ function groupByArrayPrefix(
 }
 
 /**
- * Build a validated + coerced MongoDB filter from query params.
- * Only whitelisted fields are allowed. Invalid fields are ignored.
- * Array fields use $elemMatch when multiple sub-fields from same array are filtered.
+ * Apply a single filter operator to build a MongoDB condition.
+ */
+function applyOperator(
+  operator: FilterOperator,
+  value: string,
+  prop: SchemaProperty | null
+): unknown {
+  switch (operator) {
+    case 'gte':
+      return { $gte: prop ? coerceValue(value, prop) : value };
+    case 'lte':
+      return { $lte: prop ? coerceValue(value, prop) : value };
+    case 'contains':
+      // Case-insensitive substring match
+      return { $regex: value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    case 'in':
+      // Comma-separated list
+      return { $in: value.split(',').map(v => prop ? coerceValue(v.trim(), prop) : v.trim()) };
+    default:
+      // exact match
+      return prop ? coerceValue(value, prop) : value;
+  }
+}
+
+/**
+ * Build a MongoDB filter from parsed+validated filter params.
+ * Array sub-fields sharing the same array parent are grouped into $elemMatch.
+ * HIGH-8 + HIGH-9: Accepts ParsedFilterParam[] (already validated, with operators).
  */
 export function buildSchemaFilter(
-  filterParams: Record<string, string>,
+  parsedParams: ParsedFilterParam[],
   whitelist: Set<string>,
   schemaProperties: Record<string, SchemaProperty>
 ): Record<string, unknown> {
   const filter: Record<string, unknown> = {};
 
-  // Separate unknown/invalid fields
-  const validParams: Record<string, string> = {};
-  for (const [field, value] of Object.entries(filterParams)) {
-    if (whitelist.has(field)) {
-      validParams[field] = value;
+  // Group array sub-fields by their array parent for $elemMatch
+  const arrayGroups: Record<string, Array<{ subField: string; operator: FilterOperator; value: string }>> = {};
+  const directParams: ParsedFilterParam[] = [];
+
+  for (const param of parsedParams) {
+    const parts = param.field.split('.');
+    let isArray = false;
+    let arrayPrefix = '';
+
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join('.');
+      if (whitelist.has(`${prefix}[]`)) {
+        isArray = true;
+        arrayPrefix = prefix;
+        break;
+      }
     }
-    // Silently ignore non-whitelisted fields
+
+    if (isArray) {
+      if (!arrayGroups[arrayPrefix]) arrayGroups[arrayPrefix] = [];
+      const subField = param.field.slice(arrayPrefix.length + 1);
+      arrayGroups[arrayPrefix].push({ subField, operator: param.operator, value: param.value });
+    } else {
+      directParams.push(param);
+    }
   }
 
-  const { direct, arrayGroups } = groupByArrayPrefix(validParams, whitelist);
-
-  // Build direct field filters
-  for (const [field, value] of Object.entries(direct)) {
+  // Direct (non-array) fields
+  for (const { field, operator, value } of directParams) {
     const prop = getPropertyForPath(schemaProperties, field);
-    const coerced = prop ? coerceValue(value, prop) : value;
-    filter[field] = coerced;
+    const condition = applyOperator(operator, value, prop);
+    if (operator !== 'exact') {
+      filter[field] = condition;
+    } else {
+      filter[field] = condition;
+    }
   }
 
-  // Build $elemMatch for array groups
-  for (const [arrayField, subFields] of Object.entries(arrayGroups)) {
+  // Array fields — group into $elemMatch
+  for (const [arrayField, entries] of Object.entries(arrayGroups)) {
     const elemMatch: Record<string, unknown> = {};
-    for (const [subField, value] of Object.entries(subFields)) {
+    for (const { subField, operator, value } of entries) {
       const fullPath = `${arrayField}.${subField}`;
       const prop = getPropertyForPath(schemaProperties, fullPath);
-      elemMatch[subField] = prop ? coerceValue(value, prop) : value;
+      elemMatch[subField] = applyOperator(operator, value, prop);
     }
     filter[arrayField] = { $elemMatch: elemMatch };
   }

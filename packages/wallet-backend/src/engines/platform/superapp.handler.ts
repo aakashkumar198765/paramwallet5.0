@@ -1,4 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { createHash } from 'crypto';
+import { Document } from 'mongodb';
 import { getDb } from '../../db/mongo.js';
 import {
   resolveDefinitionsDb,
@@ -6,10 +8,32 @@ import {
   resolveWorkspaceDb,
   resolveSuperAppDbName,
 } from '../../db/resolver.js';
-import { ensureAppUserIndexes } from '../../db/indexes.js';
+import { ensureAppUserIndexes, ensureOrganizationIndexes } from '../../db/indexes.js';
 import { InstallSuperAppSchema } from './schemas.js';
+import { z } from 'zod';
 import type { AuthContext } from '../../middleware/auth.js';
 import type { RequestContext } from '../../middleware/request-context.js';
+
+const ManifestSchema = z.object({
+  roles: z.array(z.object({
+    role: z.string().min(1),
+    paramId: z.string().min(1),
+    orgName: z.string().min(1),
+    orgAdmin: z.string().email(),
+    // B-5/B-6 fix: partnerId field added so partner orgs get the 5-part _id format
+    // "org:{superAppId}:{role}:{paramId[2:22]}:{partnerId}" per spec §9.1
+    partnerId: z.string().optional(),
+    users: z.array(z.object({
+      email: z.string().email(),
+      name: z.string().optional(),
+      plantTeams: z.array(z.object({
+        plant: z.string(),
+        teams: z.array(z.string()),
+      })).default([]),
+      isOrgAdmin: z.boolean().default(false),
+    })).default([]),
+  })),
+});
 
 /**
  * POST /superapp/install
@@ -59,11 +83,20 @@ export async function installSuperApp(
 
   const now = Date.now();
 
+  // MED-10/LOW-2 fix: use caller-provided orgName if available; fallback to user name from subdomain_users
+  // (subdomain_users.name is the user's personal name, not org name — caller should provide orgName)
+  let sponsorOrgName = body.orgName ?? '';
+  if (!sponsorOrgName) {
+    const installerRecord = await saasDb.collection('subdomain_users').findOne({ userId: req.authContext.userId });
+    sponsorOrgName = (installerRecord as Record<string, unknown> | null)?.name as string ?? '';
+  }
+
   // Step 3: Write {subdomain}.installed_superapps — full copy of superapp_definitions + install metadata
   const installedDoc = {
     ...defRecord,
     _id: superAppId,
-    paramId: req.authContext.paramId,   // installer's org paramId
+    paramId: req.authContext.paramId,
+    installedBy: req.authContext.userId,
     status: 'active',
     installedAt: now,
     updatedAt: now,
@@ -90,8 +123,9 @@ export async function installSuperApp(
         role: sponsorRole,
         org: {
           paramId: req.authContext.paramId,
-          name: '',
+          name: sponsorOrgName,
         },
+        orgAdmin: null,
         isSponsorOrg: true,
         status: 'active',
         onboardedAt: now,
@@ -113,9 +147,18 @@ export async function installSuperApp(
   }
 
   // Step 6: Append workspace to param_saas.subdomain_users[caller.userId].subdomains
+  // HIGH-3 fix: Use _id-based lookup and include $setOnInsert with all required fields
+  // so that if this is the first access the document is created with proper schema.
+  const callerSubdUserDocId = `user:${req.authContext.userId}`;
   await saasDb.collection('subdomain_users').updateOne(
-    { userId: req.authContext.userId },
+    { _id: callerSubdUserDocId as unknown as string },
     {
+      $setOnInsert: {
+        _id: callerSubdUserDocId,
+        userId: req.authContext.userId,
+        email: req.authContext.email,
+        createdAt: now,
+      } as unknown as Document,
       $addToSet: { subdomains: workspace } as Record<string, unknown>,
       $set: { updatedAt: now },
     },
@@ -123,6 +166,7 @@ export async function installSuperApp(
   );
 
   await ensureAppUserIndexes(sappDbName);
+  await ensureOrganizationIndexes(sappDbName);
 
   // Spec response: created installed_superapps document — full copy + install metadata
   return reply.status(201).send(installedDoc);
@@ -196,6 +240,141 @@ export async function getInstalledSuperApp(
 
   // Spec response: full installed_superapps doc + orgs (no wrapper)
   return reply.send({ ...(superApp as Record<string, unknown>), orgs });
+}
+
+/**
+ * POST /superapp/:superAppId/manifest
+ * Spec §15.8: Atomic batch onboard orgs + assign users.
+ * Guard: Workspace admin.
+ */
+export async function manifestSuperApp(
+  request: FastifyRequest<{ Params: { superAppId: string } }>,
+  reply: FastifyReply
+): Promise<void> {
+  const body = ManifestSchema.parse(request.body);
+  const req = request as FastifyRequest<{ Params: { superAppId: string } }> & {
+    authContext: AuthContext;
+    requestContext: RequestContext;
+  };
+  const { workspace } = req.requestContext;
+  if (!workspace) return reply.status(400).send({ error: 'X-Workspace header required' });
+
+  const { superAppId } = request.params;
+  const sappDb = getDb(resolveSuperAppDbName(workspace, superAppId));
+  const saasDb = getDb(resolveDomainDb());
+  const now = Date.now();
+
+  const onboarded: Array<{ role: string; paramId: string; orgName: string }> = [];
+  const usersCreated: Array<{ email: string; userId: string }> = [];
+  const createdOrgIds: string[] = [];
+  const createdAppUserIds: string[] = [];
+
+  try {
+    for (const entry of body.roles) {
+      const { role, paramId: orgParamId, orgName, orgAdmin, users, partnerId } = entry;
+
+      const orgPart = orgParamId.startsWith('0x')
+        ? orgParamId.slice(2, 22)
+        : orgParamId.slice(0, 20);
+      // B-5 fix: use 5-part _id for partner roles (partnerId present), 4-part for sponsor
+      const orgId = partnerId
+        ? `org:${superAppId}:${role}:${orgPart}:${partnerId}`
+        : `org:${superAppId}:${role}:${orgPart}`;
+
+      // 1. Upsert org in sapp.organizations
+      await sappDb.collection('organizations').updateOne(
+        { _id: orgId as unknown as string },
+        {
+          $set: {
+            _id: orgId,
+            superAppId,
+            role,
+            org: { paramId: orgParamId, name: orgName, ...(partnerId ? { partnerId } : {}) },
+            orgAdmin,
+            isSponsorOrg: !partnerId,
+            status: 'active',
+            onboardedAt: now,
+            updatedAt: now,
+          },
+          $setOnInsert: { createdAt: now } as unknown as Document,
+        },
+        { upsert: true }
+      );
+      createdOrgIds.push(orgId);
+      onboarded.push({ role, paramId: orgParamId, orgName });
+
+      // 2. Upsert orgAdmin in subdomain_users
+      const adminUserId = createHash('sha256').update(orgAdmin.toLowerCase()).digest('hex');
+      const adminSubdUserDocId = `user:${adminUserId}`;
+      await saasDb.collection('subdomain_users').updateOne(
+        { _id: adminSubdUserDocId as unknown as string },
+        {
+          $setOnInsert: { _id: adminSubdUserDocId, userId: adminUserId, email: orgAdmin, createdAt: now } as unknown as Document,
+          $addToSet: { subdomains: workspace } as unknown as Document,
+          $set: { orgParamId, updatedAt: now },
+        },
+        { upsert: true }
+      );
+
+      // 3. Assign users
+      for (const user of users) {
+        const userId = createHash('sha256').update(user.email.toLowerCase()).digest('hex');
+        // B-6 fix: use vendor _id format when partnerId present per spec §9.2
+        const docId = partnerId
+          ? `user:${superAppId}:${userId}:${partnerId}`
+          : `user:${superAppId}:${userId}`;
+
+        await sappDb.collection('app_users').updateOne(
+          { _id: docId as unknown as string },
+          {
+            $set: {
+              _id: docId,
+              userId,
+              email: user.email,
+              name: user.name ?? null,
+              superAppId,
+              role,
+              orgParamId,
+              ...(partnerId ? { partnerId } : {}),
+              plantTeams: user.plantTeams,
+              isOrgAdmin: user.isOrgAdmin,
+              status: 'active',
+              addedAt: now,
+              addedBy: req.authContext.paramId,
+              updatedAt: now,
+            },
+            $setOnInsert: { createdAt: now } as unknown as Document,
+          },
+          { upsert: true }
+        );
+        createdAppUserIds.push(docId);
+
+        const subdUserDocId = `user:${userId}`;
+        await saasDb.collection('subdomain_users').updateOne(
+          { _id: subdUserDocId as unknown as string },
+          {
+            $setOnInsert: { _id: subdUserDocId, userId, email: user.email, createdAt: now } as unknown as Document,
+            $addToSet: { subdomains: workspace } as unknown as Document,
+            $set: { updatedAt: now },
+          },
+          { upsert: true }
+        );
+
+        usersCreated.push({ email: user.email, userId });
+      }
+    }
+  } catch (err) {
+    // Rollback: delete all created docs on failure
+    if (createdOrgIds.length > 0) {
+      await sappDb.collection('organizations').deleteMany({ _id: { $in: createdOrgIds as unknown[] } });
+    }
+    if (createdAppUserIds.length > 0) {
+      await sappDb.collection('app_users').deleteMany({ _id: { $in: createdAppUserIds as unknown[] } });
+    }
+    throw err;
+  }
+
+  return reply.status(201).send({ onboarded, users: usersCreated });
 }
 
 /**

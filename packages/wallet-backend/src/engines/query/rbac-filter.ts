@@ -53,22 +53,26 @@ export async function resolveAppUserContext(
   doc: Record<string, unknown>,
   partnerIdHint?: string
 ): Promise<AppUser | null> {
+  // CRIT-5 fix: Fast path — if partnerIdHint given, do targeted lookup FIRST.
+  // Must NOT early-return on allDocs.length === 1 before checking partnerIdHint,
+  // as a single-doc vendor user could match the wrong partnerId.
+  if (partnerIdHint) {
+    const byPartner = await appUsersCol
+      .findOne({ userId, superAppId, partnerId: partnerIdHint }) as unknown as AppUser | null;
+    return byPartner;
+  }
+
   const allDocs = await appUsersCol
     .find({ userId, superAppId })
     .toArray() as unknown as AppUser[];
 
   if (allDocs.length === 0) return null;
 
-  // Single doc — sponsor user
+  // Single doc — sponsor user (no partnerIdHint, so direct return is safe)
   if (allDocs.length === 1) return allDocs[0];
 
-  // Multiple docs — vendor user, resolve by partnerId hint or plant overlap
-  if (partnerIdHint) {
-    const byPartner = allDocs.find(d => d.partnerId === partnerIdHint);
-    if (byPartner) return byPartner;
-  }
-
-  // Resolve by plant overlap with the document (use caller's org plants)
+  // Multiple docs — vendor user with multiple vendor contexts.
+  // Resolve by plant overlap with the document.
   const docPlants: string[] = getDocPlantCodes(doc, callerOrgParamId);
   for (const appUser of allDocs) {
     const userPlants = new Set(appUser.plantTeams.map(pt => pt.plant));
@@ -82,9 +86,9 @@ export async function resolveAppUserContext(
 
 /**
  * Extract plant codes from a document for a specific org.
- * Spec §9.2: plants are stored in _chain._sys.plantIDs[orgParamId] as string[]
+ * Spec §10.2: plants are stored in _chain._sys.plantIDs[orgParamId] as string[]
  */
-function getDocPlantCodes(doc: Record<string, unknown>, orgParamId?: string): string[] {
+export function getDocPlantCodes(doc: Record<string, unknown>, orgParamId?: string): string[] {
   const chain = doc._chain as Record<string, unknown> | undefined;
   if (!chain) return [];
 
@@ -110,16 +114,12 @@ export function passesL1(doc: Record<string, unknown>, callerOrgParamId: string)
   const chain = doc._chain as Record<string, unknown> | undefined;
   if (!chain) return false;
 
-  // Per spec §10.2: _chain.roles is Record<roleName, { paramId, name }>
-  // Check if any role's paramId matches callerOrgParamId
-  const roles = chain.roles as Record<string, { paramId: string; name: string }> | undefined;
+  // CRIT-1 fix: Per spec §10.2, _chain.roles values are plain paramId strings (0x addresses),
+  // NOT objects like { paramId, name }. Use Object.values(...).includes() for correct comparison.
+  // Example: { "Consignee": "0x6193b497...", "FF": "0x40Af9B6a..." }
+  const roles = chain.roles as Record<string, unknown> | undefined;
   if (roles && typeof roles === 'object' && !Array.isArray(roles)) {
-    return Object.values(roles).some(r => r.paramId === callerOrgParamId);
-  }
-
-  // Fallback: support old array format
-  if (Array.isArray(roles)) {
-    return (roles as Array<{ paramId?: string }>).some(r => r.paramId === callerOrgParamId);
+    return Object.values(roles).includes(callerOrgParamId);
   }
 
   return false;
@@ -179,17 +179,46 @@ export function getTeamAccess(
 
   const key = `${roleName}.${teamName}`;
 
-  // Find the most-specific matching permission entry (microState > subState > state)
-  // First try exact match at the requested specificity level
-  for (const perm of permissions) {
-    if (perm.state !== state) continue;
-    const permSubState = (perm.subState as string | null) ?? null;
-    const permMicroState = (perm.microState as string | null) ?? null;
+  // CRIT-6 fix: Spec §22.2 defines a three-level fallback:
+  // 1. Exact match: (state, subState, microState)
+  // 2. SubState fallback: (state, subState, null microState)
+  // 3. State fallback: (state, null subState, null microState)
+  const nullify = (v: unknown): string | null =>
+    (v === undefined || v === null) ? null : (v as string);
 
-    if (permSubState === subState && permMicroState === microState) {
-      const access = perm.access as Record<string, string> | undefined;
+  // 1. Exact match
+  const exact = permissions.find(p =>
+    p.state === state &&
+    nullify(p.subState) === subState &&
+    nullify(p.microState) === microState
+  );
+  if (exact) {
+    const access = exact.access as Record<string, string> | undefined;
+    return (access?.[key] as AccessLevel) ?? 'N/A';
+  }
+
+  // 2. SubState-level fallback (state + subState + null microState)
+  if (subState !== null) {
+    const subStateMatch = permissions.find(p =>
+      p.state === state &&
+      nullify(p.subState) === subState &&
+      nullify(p.microState) === null
+    );
+    if (subStateMatch) {
+      const access = subStateMatch.access as Record<string, string> | undefined;
       return (access?.[key] as AccessLevel) ?? 'N/A';
     }
+  }
+
+  // 3. State-level fallback (state + null subState + null microState)
+  const stateMatch = permissions.find(p =>
+    p.state === state &&
+    nullify(p.subState) === null &&
+    nullify(p.microState) === null
+  );
+  if (stateMatch) {
+    const access = stateMatch.access as Record<string, string> | undefined;
+    return (access?.[key] as AccessLevel) ?? 'N/A';
   }
 
   return 'N/A';
@@ -302,9 +331,12 @@ export function resolveDocumentAccess(
 
   if (teamAccess === 'N/A') return null;
 
-  // L3: restrictedTo check
-  const firstTeam = callerTeams[0] ?? '';
-  if (!passesL3(doc, appUser.userId, appUser.role, firstTeam)) return null;
+  // CRIT-2 fix: L3 check — spec §22.5 uses .some() across ALL caller teams.
+  // Access passes L3 if ANY of the caller's teams passes the restrictedTo check.
+  const l3Pass = callerTeams.length === 0
+    ? passesL3(doc, appUser.userId, appUser.role, '')
+    : callerTeams.some(team => passesL3(doc, appUser.userId, appUser.role, team));
+  if (!l3Pass) return null;
 
   return teamAccess;
 }

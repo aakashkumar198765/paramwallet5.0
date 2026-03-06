@@ -22,9 +22,8 @@ export async function createCoreIndexes(): Promise<void> {
     const subdomainsCol = saasDb.collection('subdomains');
     await subdomainsCol.createIndex({ subdomain: 1 }, { unique: true, background: true });
 
-    // param_auth — sessions are stored per-paramId collection
-    // We create a placeholder index on a known collection; dynamic collections get indexed on first use
-    // auth session refresh token index applied dynamically (see ensureAuthSessionIndexes)
+    // param_auth.sessions — single collection for all user sessions
+    await ensureAuthSessionIndexes();
 
     logger.info('Core MongoDB indexes created');
   } catch (err) {
@@ -34,13 +33,14 @@ export async function createCoreIndexes(): Promise<void> {
 }
 
 /**
- * Called whenever a new param_auth.{paramId} collection is first written to.
+ * Ensures indexes on param_auth.sessions (single collection for all user sessions).
  * Idempotent — MongoDB ignores duplicate index creation.
  */
-export async function ensureAuthSessionIndexes(paramId: string): Promise<void> {
+export async function ensureAuthSessionIndexes(): Promise<void> {
   const authDb = getDb(resolveAuthDb());
-  const col = authDb.collection(paramId);
+  const col = authDb.collection('sessions');
   await col.createIndex({ refreshToken: 1 }, { background: true });
+  await col.createIndex({ paramId: 1 }, { background: true });
   await col.createIndex(
     { expiresAt: 1 },
     { expireAfterSeconds: 0, background: true }  // TTL index
@@ -55,6 +55,7 @@ export async function ensureTxnHistoryIndexes(dbName: string): Promise<void> {
   const col = db.collection('txn_history');
   await col.createIndex({ docId: 1, sequence: 1 }, { background: true });
   await col.createIndex({ rootTxn: 1 }, { background: true });
+  await col.createIndex({ smId: 1, stateTo: 1 }, { background: true });
   await col.createIndex({ timestamp: -1 }, { background: true });
 }
 
@@ -66,6 +67,18 @@ export async function ensureAppUserIndexes(superAppDbName: string): Promise<void
   const col = db.collection('app_users');
   await col.createIndex({ userId: 1, superAppId: 1 }, { background: true });
   await col.createIndex({ userId: 1, superAppId: 1, partnerId: 1 }, { background: true });
+}
+
+/**
+ * Called when organizations collection is first used in a given SuperApp DB.
+ * D-3 fix: organizations is queried frequently by org.paramId, role, and org.partnerId.
+ */
+export async function ensureOrganizationIndexes(superAppDbName: string): Promise<void> {
+  const db = getDb(superAppDbName);
+  const col = db.collection('organizations');
+  await col.createIndex({ 'org.paramId': 1 }, { background: true });
+  await col.createIndex({ role: 1, 'org.paramId': 1 }, { background: true });
+  await col.createIndex({ role: 1, 'org.partnerId': 1 }, { background: true });
 }
 
 /**

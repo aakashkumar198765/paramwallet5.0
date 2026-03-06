@@ -1,66 +1,57 @@
 import apiClient from './client';
-import type { SmDocument, DocumentListParams, DocumentListResponse } from '@/types/documents';
+import type { DocumentListParams, DocumentListResponse } from '@/types/documents';
 
-export async function listOffchainDocuments(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
+// ── Query Engine — Offchain endpoints ────────────────────────────────────────
+// All use X-Workspace, X-SuperApp-ID, X-Portal headers
+
+export interface OffchainDefinition {
+  _id: string;
+  name: string;
+  linkedSuperApps: string[];
+  [key: string]: unknown;
+}
+
+export interface OffchainRegistryResponse {
+  total: number;
+  page: number;
+  limit: number;
+  records: unknown[];
+}
+
+export async function listOffchainDefinitions(): Promise<OffchainDefinition[]> {
+  const res = await apiClient.get<OffchainDefinition[]>('/offchain/definitions');
+  return res.data;
+}
+
+export async function getOffchainDefinition(offchainSmId: string): Promise<{ sm: unknown; schemas: unknown[] }> {
+  const res = await apiClient.get<{ sm: unknown; schemas: unknown[] }>(
+    `/offchain/definitions/${offchainSmId}`
+  );
+  return res.data;
+}
+
+export async function listOffchainRegistry(
+  collectionName: string,
   params: DocumentListParams = {}
-): Promise<DocumentListResponse> {
-  const res = await apiClient.get<DocumentListResponse>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/offchain/${smId}/documents`,
+): Promise<OffchainRegistryResponse> {
+  const res = await apiClient.get<OffchainRegistryResponse>(
+    `/offchain/registry/${collectionName}`,
     { params }
   );
   return res.data;
 }
 
-export async function getOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string
-): Promise<SmDocument> {
-  const res = await apiClient.get<SmDocument>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/offchain/${smId}/documents/${docId}`
+export async function getOffchainRegistryItem(
+  collectionName: string,
+  keyValue: string
+): Promise<unknown> {
+  const res = await apiClient.get<unknown>(
+    `/offchain/registry/${collectionName}/${keyValue}`
   );
   return res.data;
 }
 
-export async function createOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  data: Record<string, unknown>
-): Promise<SmDocument> {
-  const res = await apiClient.post<SmDocument>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/offchain/${smId}/documents`,
-    data
-  );
-  return res.data;
-}
-
-export async function updateOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string,
-  data: Record<string, unknown>
-): Promise<SmDocument> {
-  const res = await apiClient.put<SmDocument>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/offchain/${smId}/documents/${docId}`,
-    data
-  );
-  return res.data;
-}
-
-// Offchain definitions (master data schemas)
-export async function getOffchainDefinitions(): Promise<any[]> {
-  const res = await apiClient.get<any[]>('/platform/offchain-definitions');
-  return res.data;
-}
-
-// Offchain registry (master data records)
-export async function getOffchainRegistry(collectionName: string): Promise<any[]> {
-  const res = await apiClient.get<any[]>(`/platform/offchain-registry/${collectionName}`);
+export async function getOffchainConfig(collectionName: string): Promise<unknown> {
+  const res = await apiClient.get<unknown>(`/offchain/config/${collectionName}`);
   return res.data;
 }

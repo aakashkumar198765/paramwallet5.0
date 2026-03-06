@@ -1,68 +1,54 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
-  listOffchainDocuments,
-  getOffchainDocument,
-  createOffchainDocument,
-  updateOffchainDocument,
+  listOffchainDefinitions,
+  getOffchainDefinition,
+  listOffchainRegistry,
+  getOffchainRegistryItem,
+  getOffchainConfig,
 } from '@/api/offchain.api';
 import type { DocumentListParams } from '@/types/documents';
 
-export function useOffchainDocuments(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
+// All calls use X-Workspace, X-SuperApp-ID, X-Portal headers.
+
+export function useOffchainDefinitions() {
+  return useQuery({
+    queryKey: ['offchain', 'definitions'],
+    queryFn: listOffchainDefinitions,
+  });
+}
+
+export function useOffchainDefinition(offchainSmId: string) {
+  return useQuery({
+    queryKey: ['offchain', 'definitions', offchainSmId],
+    queryFn: () => getOffchainDefinition(offchainSmId),
+    enabled: !!offchainSmId,
+  });
+}
+
+export function useOffchainRegistry(
+  collectionName: string,
   params: DocumentListParams = {}
 ) {
   return useQuery({
-    queryKey: ['offchain-documents', subdomain, superAppId, smId, params],
-    queryFn: () => listOffchainDocuments(subdomain, superAppId, smId, params),
-    enabled: !!subdomain && !!superAppId && !!smId,
+    queryKey: ['offchain', 'registry', collectionName, params],
+    queryFn: () => listOffchainRegistry(collectionName, params),
+    enabled: !!collectionName,
     placeholderData: (prev) => prev,
   });
 }
 
-export function useOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string
-) {
+export function useOffchainRegistryItem(collectionName: string, keyValue: string) {
   return useQuery({
-    queryKey: ['offchain-document', subdomain, superAppId, smId, docId],
-    queryFn: () => getOffchainDocument(subdomain, superAppId, smId, docId),
-    enabled: !!subdomain && !!superAppId && !!smId && !!docId,
+    queryKey: ['offchain', 'registry', collectionName, keyValue],
+    queryFn: () => getOffchainRegistryItem(collectionName, keyValue),
+    enabled: !!collectionName && !!keyValue,
   });
 }
 
-export function useCreateOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createOffchainDocument(subdomain, superAppId, smId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['offchain-documents', subdomain, superAppId, smId] });
-    },
-  });
-}
-
-export function useUpdateOffchainDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      updateOffchainDocument(subdomain, superAppId, smId, docId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({
-        queryKey: ['offchain-document', subdomain, superAppId, smId, docId],
-      });
-    },
+export function useOffchainConfig(collectionName: string) {
+  return useQuery({
+    queryKey: ['offchain', 'config', collectionName],
+    queryFn: () => getOffchainConfig(collectionName),
+    enabled: !!collectionName,
   });
 }

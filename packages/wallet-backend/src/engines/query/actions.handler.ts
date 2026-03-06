@@ -10,6 +10,7 @@ import {
   passesL3,
   resolveCallerTeams,
   getTeamAccess,
+  getDocPlantCodes,
   AppUser,
 } from './rbac-filter.js';
 import type { AuthContext } from '../../middleware/auth.js';
@@ -222,7 +223,7 @@ export async function getDocumentActions(
 
   if (!appUserDoc) return reply.status(403).send({ error: 'Access denied' });
 
-  const docPlants = getDocPlantCodes(doc);
+  const docPlants = getDocPlantCodes(doc, callerOrgParamId);
   const callerTeams = resolveCallerTeams(appUserDoc as AppUser, callerOrgParamId, docPlants);
 
   // Step 2: Parse chain_head state
@@ -238,10 +239,11 @@ export async function getDocumentActions(
   const currentSubState = (subStatePart?.split('~')[0]) ?? (local?.subState as string | null) ?? null;
   const currentMicroState = (subStatePart?.split('~')[1]) ?? (local?.microState as string | null) ?? null;
 
-  // Step 1 (moved here): L3 check — if blocked, return empty arrays with blocked flag
+  // Step 1 (moved here): L3 check — spec §3.3: pass if ANY of caller's teams passes L3
   const callerRole = req.platformContext.role;
-  const firstTeam = callerTeams[0] ?? '';
-  if (!passesL3(doc, req.authContext.userId, callerRole, firstTeam)) {
+  const teamsToCheck = callerTeams.length > 0 ? callerTeams : [''];
+  const blockedByL3 = teamsToCheck.every(team => !passesL3(doc, req.authContext.userId, callerRole, team));
+  if (blockedByL3) {
     // Spec §16.1 step 1: return blocked response (NOT 403)
     return reply.send({
       blocked: true,
@@ -305,8 +307,9 @@ export async function getDocumentActions(
     const next = resolveNextStateStr(stateDef.nextState as string | SmNextState);
     if (next) {
       const ownerOk = passesOwnerCheck(stateDef.owner, callerRole);
-      if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, null, null)) {
-        const { subState, microState } = resolveStartSubState(states, next.state);
+      // HIGH-13 fix: L2 check must use resolved landing position (targetState + startSubState + startMicroState)
+      const { subState, microState } = resolveStartSubState(states, next.state);
+      if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, subState, microState)) {
         const action: ActionItem = {
           type: 'state_transition',
           label: next.label,
@@ -326,8 +329,9 @@ export async function getDocumentActions(
     const next = resolveNextStateStr(altNext as string | SmNextState);
     if (!next) continue;
     const ownerOk = passesOwnerCheck(stateDef?.owner, callerRole);
-    if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, null, null)) {
-      const { subState, microState } = resolveStartSubState(states, next.state);
+    // HIGH-13 fix: L2 check must use resolved landing position (targetState + startSubState + startMicroState)
+    const { subState, microState } = resolveStartSubState(states, next.state);
+    if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, subState, microState)) {
       const action: ActionItem = {
         type: 'state_transition',
         label: next.label,
@@ -440,16 +444,24 @@ export async function getDocumentActions(
   });
 }
 
+// ── Exported types ────────────────────────────────────────────────────────────
+
+export type { ActionItem };
+
+export interface ActionsBlock {
+  currentState: string;
+  currentSubState: string | null;
+  currentMicroState: string | null;
+  blocked?: boolean;
+  availableActions: ActionItem[];
+  alternateNextActions: ActionItem[];
+  linkedSmActions: ActionItem[];
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getDocPlantCodes(doc: Record<string, unknown>): string[] {
-  const chain = doc._chain as Record<string, unknown> | undefined;
-  if (!chain) return [];
-  const plants: string[] = [];
-  if (typeof chain.plant === 'string') plants.push(chain.plant);
-  if (Array.isArray(chain.plants)) plants.push(...chain.plants);
-  return plants;
-}
+// CRIT-3 fix: removed broken local getDocPlantCodes that read _chain.plant / _chain.plants.
+// Now uses getDocPlantCodes imported from rbac-filter which correctly reads _chain._sys.plantIDs.
 
 function passesOwnerCheck(owner: string[] | undefined, callerRole: string): boolean {
   if (!owner || owner.length === 0) return true;
@@ -497,4 +509,139 @@ function applyDiffInfo(
       action.diffReason = diffInfo.diffReason;
     }
   }
+}
+
+// ── Exported helper for include_actions in listDocuments ─────────────────────
+
+/**
+ * HIGH-7 helper: Compute the full actions block for a single document.
+ * All DB-dependent context (smDef, teamRbacMatrix, chainHead) must be pre-fetched
+ * by the caller so listDocuments can batch them across all docs efficiently.
+ */
+export async function computeActionsBlock(
+  doc: Record<string, unknown>,
+  docSmId: string,
+  appUser: AppUser,
+  callerRole: string,
+  callerOrgParamId: string,
+  chainHead: Record<string, unknown> | null,
+  smDef: Record<string, unknown> | null,
+  teamRbacMatrix: Record<string, unknown> | null,
+  defsDb: ReturnType<typeof getDb>,
+  orgDb: ReturnType<typeof getDb>,
+  foundCollection: string
+): Promise<ActionsBlock> {
+  // Parse current state from chain_head
+  const local = doc._local as Record<string, unknown> | undefined;
+  const rawStateTo = ((chainHead?.stateTo ?? local?.state ?? '') as string);
+  const [statePart, subStatePart] = rawStateTo.split(':');
+  const currentState = statePart ?? '';
+  const currentSubState = (subStatePart?.split('~')[0]) ?? (local?.subState as string | null) ?? null;
+  const currentMicroState = (subStatePart?.split('~')[1]) ?? (local?.microState as string | null) ?? null;
+
+  // L3 check
+  const docPlants = getDocPlantCodes(doc, callerOrgParamId);
+  const callerTeams = resolveCallerTeams(appUser, callerOrgParamId, docPlants);
+  const teamsToCheck = callerTeams.length > 0 ? callerTeams : [''];
+  const blockedByL3 = teamsToCheck.every(team => !passesL3(doc, appUser.userId, callerRole, team));
+
+  if (blockedByL3) {
+    return { blocked: true, currentState, currentSubState, currentMicroState, availableActions: [], alternateNextActions: [], linkedSmActions: [] };
+  }
+
+  if (!smDef) {
+    return { currentState, currentSubState, currentMicroState, availableActions: [], alternateNextActions: [], linkedSmActions: [] };
+  }
+
+  const states = (smDef.states ?? {}) as Record<string, SmState>;
+  const stateDef = states[currentState];
+
+  const availableActions: ActionItem[] = [];
+  const alternateNextActions: ActionItem[] = [];
+  const linkedSmActionsArr: ActionItem[] = [];
+
+  const diffInfo = await computeDiffForAction(orgDb, doc, foundCollection);
+
+  // (a) State-level nextState
+  if (stateDef?.nextState && !stateDef.end) {
+    const next = resolveNextStateStr(stateDef.nextState as string | SmNextState);
+    if (next) {
+      const ownerOk = passesOwnerCheck(stateDef.owner, callerRole);
+      const { subState, microState } = resolveStartSubState(states, next.state);
+      if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, subState, microState)) {
+        const action: ActionItem = { type: 'state_transition', label: next.label, targetState: next.state, targetSubState: subState, targetMicroState: microState, smId: docSmId };
+        applyDiffInfo(action, diffInfo);
+        availableActions.push(action);
+      }
+    }
+  }
+
+  // (b) State-level alternateNext
+  for (const altNext of (stateDef?.alternateNext ?? [])) {
+    const next = resolveNextStateStr(altNext as string | SmNextState);
+    if (!next) continue;
+    const ownerOk = passesOwnerCheck(stateDef?.owner, callerRole);
+    const { subState, microState } = resolveStartSubState(states, next.state);
+    if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, next.state, subState, microState)) {
+      const action: ActionItem = { type: 'state_transition', label: next.label, targetState: next.state, targetSubState: subState, targetMicroState: microState, smId: docSmId };
+      applyDiffInfo(action, diffInfo);
+      alternateNextActions.push(action);
+    }
+  }
+
+  // (c) SubState-level nextState
+  if (currentSubState) {
+    const subStateDef = stateDef?.subStates?.[currentSubState];
+    if (subStateDef?.nextState) {
+      const next = resolveNextStateStr(subStateDef.nextState as string | SmNextState);
+      if (next) {
+        const ownerOk = passesOwnerCheck(subStateDef.owner, callerRole);
+        if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, currentState, next.state, null)) {
+          const targetSubStateDef = stateDef?.subStates?.[next.state];
+          const microState = targetSubStateDef ? resolveStartMicroState(targetSubStateDef) : null;
+          availableActions.push({ type: 'substate_transition', label: next.label, targetState: currentState, targetSubState: next.state, targetMicroState: microState, smId: docSmId });
+        }
+      }
+    }
+
+    // (d) MicroState-level nextState
+    if (currentMicroState) {
+      const microStateDef = stateDef?.subStates?.[currentSubState]?.microStates?.[currentMicroState];
+      if (microStateDef?.nextState) {
+        const next = resolveNextStateStr(microStateDef.nextState as string | SmNextState);
+        if (next) {
+          const ownerOk = passesOwnerCheck(microStateDef.owner, callerRole);
+          if (ownerOk && passesL2Check(teamRbacMatrix, callerTeams, callerRole, currentState, currentSubState, next.state)) {
+            availableActions.push({ type: 'microstate_transition', label: next.label, targetState: currentState, targetSubState: currentSubState, targetMicroState: next.state, smId: docSmId });
+          }
+        }
+      }
+    }
+  }
+
+  // (e) LinkedSMs
+  for (const linked of (stateDef?.linkedSMs ?? [])) {
+    let linkedSmId: string, linkedLabel: string, linkedStartAt: string | undefined;
+    if (typeof linked === 'string') { linkedSmId = linked; linkedLabel = linked; }
+    else { linkedSmId = linked.smId; linkedLabel = linked.label ?? linked.smId; linkedStartAt = linked.startAt; }
+
+    if (!passesOwnerCheck(stateDef?.owner, callerRole)) continue;
+
+    const linkedSmDef = await defsDb
+      .collection('onchain_sm_definitions')
+      .findOne({ _id: linkedSmId as unknown as string }) as Record<string, unknown> | null;
+
+    const targetState = linkedStartAt ?? (linkedSmDef?.startAt as string) ?? '';
+    const linkedSmName = (linkedSmDef?.name ?? linkedSmDef?.displayName ?? linkedSmId) as string;
+    const linkedStates = (linkedSmDef?.states ?? {}) as Record<string, SmState>;
+    const { subState: targetSubState, microState: targetMicroState } = resolveStartSubState(linkedStates, targetState);
+
+    if (!passesL2Check(teamRbacMatrix, callerTeams, callerRole, targetState, targetSubState, targetMicroState)) continue;
+
+    const action: ActionItem = { type: 'create_linked_doc', label: linkedLabel, smId: linkedSmId, smName: linkedSmName, targetState, targetSubState, targetMicroState };
+    applyDiffInfo(action, diffInfo);
+    linkedSmActionsArr.push(action);
+  }
+
+  return { currentState, currentSubState, currentMicroState, availableActions, alternateNextActions, linkedSmActions: linkedSmActionsArr };
 }

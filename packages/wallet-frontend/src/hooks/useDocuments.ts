@@ -7,50 +7,36 @@ import {
 } from '@/api/documents.api';
 import type { DocumentListParams } from '@/types/documents';
 
-export function useDocuments(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  params: DocumentListParams = {}
-) {
+// Context (workspace, superAppId, portal) is injected via headers by client.ts interceptor.
+
+export function useDocuments(smId: string, params: DocumentListParams = {}) {
   return useQuery({
-    queryKey: ['documents', subdomain, superAppId, smId, params],
-    queryFn: () => listDocuments(subdomain, superAppId, smId, params),
-    enabled: !!subdomain && !!superAppId && !!smId,
+    queryKey: ['documents', smId, params],
+    queryFn: () => listDocuments({ smId, ...params }),
+    enabled: !!smId,
     placeholderData: (prev) => prev,
   });
 }
 
-export function useDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string
-) {
+export function useDocument(docId: string) {
   return useQuery({
-    queryKey: ['document', subdomain, superAppId, smId, docId],
-    queryFn: () => getDocument(subdomain, superAppId, smId, docId),
-    enabled: !!subdomain && !!superAppId && !!smId && !!docId,
+    queryKey: ['document', docId],
+    queryFn: () => getDocument(docId),
+    enabled: !!docId,
   });
 }
 
-export function useCreateDocument(subdomain: string, superAppId: string, smId: string) {
+export function useCreateDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      createDocument(subdomain, superAppId, smId, data),
+    mutationFn: (data: Record<string, unknown>) => createDocument(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['documents', subdomain, superAppId, smId] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
     },
   });
 }
 
-export function useTransitionDocument(
-  subdomain: string,
-  superAppId: string,
-  smId: string,
-  docId: string
-) {
+export function useTransitionDocument(docId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: {
@@ -58,10 +44,10 @@ export function useTransitionDocument(
       targetSubState?: string | null;
       targetMicroState?: string | null;
       payload?: Record<string, unknown>;
-    }) => transitionDocument(subdomain, superAppId, smId, docId, data),
+    }) => transitionDocument(docId, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['document', subdomain, superAppId, smId, docId] });
-      qc.invalidateQueries({ queryKey: ['documents', subdomain, superAppId, smId] });
+      qc.invalidateQueries({ queryKey: ['document', docId] });
+      qc.invalidateQueries({ queryKey: ['documents'] });
     },
   });
 }

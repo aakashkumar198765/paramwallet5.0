@@ -13,7 +13,7 @@ import { requestOtp, verifyOtp } from '@/api/auth.api';
 import { Mail, KeyRound } from 'lucide-react';
 
 const emailSchema = z.object({ email: z.string().email('Enter a valid email') });
-const otpSchema = z.object({ otp: z.string().length(6, 'OTP must be 6 digits') });
+const otpSchema = z.object({ otp: z.string().min(4, 'OTP must be 4-8 characters').max(8, 'OTP must be 4-8 characters').regex(/^[a-zA-Z0-9]+$/, 'OTP must be alphanumeric') });
 
 type EmailForm = z.infer<typeof emailSchema>;
 type OtpForm = z.infer<typeof otpSchema>;
@@ -39,6 +39,7 @@ export default function Login() {
     try {
       await requestOtp(data.email);
       setEmail(data.email);
+      otpForm.reset();
       setStep('otp');
       toast({ title: 'OTP sent', description: `Check your email: ${data.email}` });
     } catch {
@@ -55,9 +56,9 @@ export default function Login() {
       setAuth({
         token: result.token,
         refreshToken: result.refreshToken,
-        paramId: result.paramId,
-        userId: result.userId,
-        email: result.email,
+        paramId: result.enn.paramId,
+        userId: result.user.userId,
+        email: result.user.email,
       });
       navigate('/post-login');
     } catch {
@@ -74,7 +75,7 @@ export default function Login() {
         <CardDescription>
           {step === 'email'
             ? 'Enter your email to receive a one-time password'
-            : `Enter the 6-digit code sent to ${email}`}
+            : `Enter the 8-character code sent to ${email}`}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -103,17 +104,18 @@ export default function Login() {
             </Button>
           </form>
         ) : (
-          <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} className="space-y-4">
+          <form onSubmit={otpForm.handleSubmit(handleOtpSubmit)} className="space-y-4" autoComplete="off">
             <div className="space-y-2">
               <Label htmlFor="otp">One-Time Password</Label>
               <div className="relative">
                 <KeyRound className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  key="otp-input"
                   id="otp"
                   type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="123456"
+                  autoComplete="off"
+                  maxLength={8}
+                  placeholder="A1B2C3D4"
                   className="pl-8 tracking-widest text-center text-lg"
                   {...otpForm.register('otp')}
                 />

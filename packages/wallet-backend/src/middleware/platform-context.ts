@@ -33,7 +33,7 @@ const PLATFORM_SKIP_PREFIXES = [
 
 const PLATFORM_SKIP_EXACT = new Set([
   '/api/v1/profile',
-  '/api/v1/user/profile',
+  '/api/v1/user/profile',  // covers both GET and PUT — path-based check (no method prefix)
   '/api/v1/workspace/list',
   '/api/v1/workspace/create',
 ]);

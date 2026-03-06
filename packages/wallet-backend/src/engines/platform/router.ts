@@ -37,6 +37,7 @@ import {
   listInstalledSuperApps,
   getInstalledSuperApp,
   updateSuperAppStatus,
+  manifestSuperApp,
 } from './superapp.handler.js';
 import {
   getOrgProfile,
@@ -112,6 +113,7 @@ export async function platformRouter(fastify: FastifyInstance): Promise<void> {
   fastify.get('/superapp', listInstalledSuperApps);
   fastify.get('/superapp/:superAppId', getInstalledSuperApp);
   fastify.put('/superapp/:superAppId/status', updateSuperAppStatus);
+  fastify.post('/superapp/:superAppId/manifest', manifestSuperApp);
 
   // ── Organisations ────────────────────────────────────────────────────────────
   fastify.get('/superapp/:superAppId/org/profile', getOrgProfile);

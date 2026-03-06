@@ -24,19 +24,16 @@ export async function getProfile(
 
   const userRecord = await saasDb.collection('subdomain_users').findOne({ userId });
 
-  if (!userRecord) {
-    return reply.status(404).send({ error: 'User profile not found' });
-  }
-
-  const userDoc = userRecord as Record<string, unknown>;
+  // Spec §15.2: always returns a profile; new users may not have a subdomain_users record yet
+  const userDoc = userRecord as Record<string, unknown> | null;
 
   // Spec response shape: { user: { userId, email, name, subdomains }, org: null }
   const response: Record<string, unknown> = {
     user: {
-      userId: userDoc.userId,
-      email: userDoc.email,
-      name: userDoc.name ?? null,
-      subdomains: userDoc.subdomains ?? [],
+      userId: userDoc?.userId ?? userId,
+      email: userDoc?.email ?? req.authContext.email,
+      name: userDoc?.name ?? null,
+      subdomains: userDoc?.subdomains ?? [],
     },
     org: null,
   };
@@ -88,18 +85,14 @@ export async function getUserProfile(
     .collection('subdomain_users')
     .findOne({ userId: req.authContext.userId });
 
-  if (!userRecord) {
-    return reply.status(404).send({ error: 'User profile not found' });
-  }
+  const u = userRecord as Record<string, unknown> | null;
 
-  const u = userRecord as Record<string, unknown>;
-
-  // Spec response: { userId, email, name, subdomains }
+  // Spec response: { userId, email, name, subdomains } — return empty profile if not yet registered
   return reply.send({
-    userId: u.userId,
-    email: u.email,
-    name: u.name ?? null,
-    subdomains: u.subdomains ?? [],
+    userId: u?.userId ?? req.authContext.userId,
+    email: u?.email ?? req.authContext.email,
+    name: u?.name ?? null,
+    subdomains: u?.subdomains ?? [],
   });
 }
 

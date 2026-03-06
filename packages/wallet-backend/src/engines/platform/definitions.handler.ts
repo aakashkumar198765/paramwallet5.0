@@ -62,7 +62,6 @@ export async function createSuperAppDefinition(
 
   const doc = {
     _id: superAppId,
-    superAppId,
     ...body,
     createdBy: req.authContext.userId,
     createdAt: now,
@@ -146,10 +145,18 @@ export async function getSmStates(
 
   if (!doc) return reply.status(404).send({ error: 'SM definition not found' });
 
-  // Spec §16.2: Extract states hierarchy — stored in doc.states or doc.stateMachine.states
-  const raw = doc.states ?? (doc.stateMachine as Record<string, unknown>)?.states ?? {};
-  // Spec response: { smId, states: <hierarchy> }
-  return reply.send({ smId, states: raw });
+  // HIGH-6 fix: Spec §16.2 requires states as a navigable array with `name` keys:
+  // [{ "name": "Contract", "phase": "Agreement", "subStates": [...] }]
+  // The raw doc.states is a keyed object: { "Contract": { desc, phase, subStates, ... } }
+  // Convert to array format for spec compliance.
+  const rawStates = (doc.states ?? {}) as Record<string, Record<string, unknown>>;
+  const statesArray = Object.entries(rawStates).map(([name, def]) => ({
+    name,
+    ...def,
+  }));
+
+  // Spec response: { smId, states: [...] }
+  return reply.send({ smId, states: statesArray });
 }
 
 // ── Schema Definitions ─────────────────────────────────────────────────────────
@@ -288,12 +295,22 @@ export async function createDefinitionTeamRbacMatrix(
   const body = CreateTeamRbacMatrixSchema.parse(request.body);
   const db = getDb(resolveDefinitionsDb());
 
+  // Look up smName from onchain_sm_definitions if not provided in body
+  let smName = body.smName;
+  if (!smName) {
+    const smDef = await db
+      .collection('onchain_sm_definitions')
+      .findOne({ _id: body.smId as unknown as string });
+    smName = (smDef as Record<string, unknown> | null)?.name as string | undefined;
+  }
+
   const id = `${body.superAppId.slice(0, 8)}:${body.smId}`;
   const now = Date.now();
 
   const doc = {
     _id: id,
     ...body,
+    smName: smName ?? null,
     createdAt: now,
     updatedAt: now,
   };

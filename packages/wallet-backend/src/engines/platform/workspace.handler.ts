@@ -26,25 +26,35 @@ export async function createWorkspace(
     _id: body.subdomain,
     subdomain: body.subdomain,
     workspaceName: body.workspaceName,
-    exchangeParamId: body.exchangeParamId,
-    ownerId: req.authContext.userId,
+    ownerParamId: req.authContext.paramId,
+    ownerOrgName: body.ownerOrgName ?? '',
     createdAt: now,
     updatedAt: now,
     status: 'active',
   };
 
-  // Insert into param_saas.subdomains (409 if duplicate)
-  await saasDb.collection('subdomains').insertOne(workspaceDoc as unknown as Document);
+  // MED-4 fix: Insert into param_saas.subdomains — catch duplicate key to return 409
+  try {
+    await saasDb.collection('subdomains').insertOne(workspaceDoc as unknown as Document);
+  } catch (err: unknown) {
+    const mongoErr = err as { code?: number };
+    if (mongoErr?.code === 11000) {
+      return reply.status(409).send({ error: 'Workspace with this subdomain already exists' });
+    }
+    throw err;
+  }
 
   // Register this workspace in the user's subdomain_users record
+  const wsOwnerDocId = `user:${req.authContext.userId}`;
   await saasDb.collection('subdomain_users').updateOne(
-    { userId: req.authContext.userId },
+    { _id: wsOwnerDocId as unknown as string },
     {
       $setOnInsert: {
+        _id: wsOwnerDocId,
         userId: req.authContext.userId,
         email: req.authContext.email,
         createdAt: now,
-      },
+      } as Record<string, unknown>,
       $addToSet: { subdomains: body.subdomain } as Record<string, unknown>,
       $set: { updatedAt: now },
     },
@@ -59,11 +69,10 @@ export async function createWorkspace(
     { upsert: true }
   );
 
-  // Spec response: { subdomain, workspaceName, exchangeParamId, createdAt (ms) }
+  // Spec response: { subdomain, workspaceName, createdAt (ms) }
   return reply.status(201).send({
     subdomain: body.subdomain,
     workspaceName: body.workspaceName,
-    exchangeParamId: body.exchangeParamId,
     createdAt: now,
   });
 }
@@ -87,7 +96,7 @@ export async function listWorkspaces(
   const workspaces = await saasDb
     .collection('subdomains')
     .find({ _id: { $in: subdomains as unknown[] } })
-    .project({ subdomain: 1, workspaceName: 1 })
+    .project({ _id: 0, subdomain: 1, workspaceName: 1 })
     .toArray();
 
   // Spec response: [{ subdomain, workspaceName }]
@@ -174,7 +183,7 @@ export async function createPlant(
   const now = Date.now();
 
   const doc = {
-    _id: body.code,
+    _id: `plant:${body.code}`,
     code: body.code,
     name: body.name,
     paramId: body.paramId ?? null,
@@ -206,7 +215,7 @@ export async function updatePlant(
 
   const wsDb = getDb(workspaceDbName);
   const result = await wsDb.collection('plants').findOneAndUpdate(
-    { _id: request.params.code as unknown as string },
+    { _id: `plant:${request.params.code}` as unknown as string },
     { $set: { ...body, updatedAt: Date.now() } },
     { returnDocument: 'after' }
   );
@@ -231,7 +240,7 @@ export async function deletePlant(
 
   const wsDb = getDb(workspaceDbName);
   const result = await wsDb.collection('plants').findOneAndUpdate(
-    { _id: request.params.code as unknown as string },
+    { _id: `plant:${request.params.code}` as unknown as string },
     { $set: { isActive: false, updatedAt: Date.now() } },
     { returnDocument: 'after' }
   );

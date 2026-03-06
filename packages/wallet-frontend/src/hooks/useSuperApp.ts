@@ -4,25 +4,25 @@ import {
   listInstalledSuperApps,
   getInstalledSuperApp,
   installSuperApp,
-  uninstallSuperApp,
+  updateSuperAppStatus,
   listAvailableSuperApps,
-  getSuperAppKpis,
 } from '@/api/superapp.api';
 import type { InstalledSuperApp } from '@/types/workspace';
 
-export function useInstalledSuperApps(subdomain: string) {
+// All calls use X-Workspace header from store.
+
+export function useInstalledSuperApps() {
   return useQuery<InstalledSuperApp[]>({
-    queryKey: ['superapps', subdomain],
-    queryFn: () => listInstalledSuperApps(subdomain),
-    enabled: !!subdomain,
+    queryKey: ['superapps'],
+    queryFn: listInstalledSuperApps,
   });
 }
 
-export function useInstalledSuperApp(subdomain: string, superAppId: string) {
+export function useInstalledSuperApp(superAppId: string) {
   return useQuery<InstalledSuperApp>({
-    queryKey: ['superapps', subdomain, superAppId],
-    queryFn: () => getInstalledSuperApp(subdomain, superAppId),
-    enabled: !!subdomain && !!superAppId,
+    queryKey: ['superapps', superAppId],
+    queryFn: () => getInstalledSuperApp(superAppId),
+    enabled: !!superAppId,
   });
 }
 
@@ -33,33 +33,25 @@ export function useAvailableSuperApps() {
   });
 }
 
-export function useInstallSuperApp(subdomain: string) {
+export function useInstallSuperApp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { superAppDefId: string; config?: Record<string, unknown> }) =>
-      installSuperApp(subdomain, data),
+    mutationFn: (data: { superAppDefId: string; orgName?: string; config?: Record<string, unknown> }) =>
+      installSuperApp(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['superapps', subdomain] });
+      qc.invalidateQueries({ queryKey: ['superapps'] });
     },
   });
 }
 
-export function useUninstallSuperApp(subdomain: string) {
+export function useUpdateSuperAppStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (superAppId: string) => uninstallSuperApp(subdomain, superAppId),
+    mutationFn: ({ superAppId, status }: { superAppId: string; status: string }) =>
+      updateSuperAppStatus(superAppId, status),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['superapps', subdomain] });
+      qc.invalidateQueries({ queryKey: ['superapps'] });
     },
-  });
-}
-
-export function useSuperAppKpis(subdomain: string, superAppId: string) {
-  return useQuery({
-    queryKey: ['superapps', subdomain, superAppId, 'kpis'],
-    queryFn: () => getSuperAppKpis(subdomain, superAppId),
-    enabled: !!subdomain && !!superAppId,
-    refetchInterval: 30_000,
   });
 }
 

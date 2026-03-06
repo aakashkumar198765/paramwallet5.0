@@ -20,11 +20,10 @@ export function useWorkspaces() {
   });
 }
 
-export function useWorkspace(subdomain: string) {
+export function useWorkspace() {
   return useQuery<Workspace>({
-    queryKey: ['workspace', subdomain],
-    queryFn: () => getWorkspace(subdomain),
-    enabled: !!subdomain,
+    queryKey: ['workspace'],
+    queryFn: getWorkspace,
   });
 }
 

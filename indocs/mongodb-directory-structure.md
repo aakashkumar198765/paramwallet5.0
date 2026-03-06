@@ -16,7 +16,7 @@ MongoDB Instance
 │   └── subdomain_users
 │
 ├── param_auth
-│   └── {paramId}
+│   └── sessions
 │
 ├── {subdomain}
 │   ├── installed_superapps

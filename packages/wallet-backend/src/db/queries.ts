@@ -2,16 +2,16 @@ import { Collection, Filter, FindOptions, Document } from 'mongodb';
 
 /**
  * Build a MongoDB filter that restricts results to documents belonging to specific plants.
- * SM documents store plant info in _chain.plant (string) or _chain.plants (array).
+ * Per spec §10.2: plants are stored in _chain._sys.plantIDs[orgParamId] as string[].
+ * LOW-5 fix: removed wrong _chain.plant / _chain.plants fields.
  */
-export function buildPlantFilter(plantCodes: string[]): Filter<Document> {
+export function buildPlantFilter(plantCodes: string[], orgParamId?: string): Filter<Document> {
   if (plantCodes.length === 0) return {};
-  return {
-    $or: [
-      { '_chain.plant': { $in: plantCodes } },
-      { '_chain.plants': { $in: plantCodes } },
-    ],
-  };
+  if (orgParamId) {
+    return { [`_chain._sys.plantIDs.${orgParamId}`]: { $in: plantCodes } };
+  }
+  // Fallback without org-specific key (avoid if possible)
+  return { '_chain._sys.plantIDs': { $exists: true } };
 }
 
 /**
@@ -28,12 +28,14 @@ export function buildPartnerFilter(partnerId: string): Filter<Document> {
 
 /**
  * Build a date range filter on _local.timestamp.
+ * CRIT-4 fix: _local.timestamp is stored as epoch ms integer (not Date object).
+ * from/to params are epoch ms strings — must parse as integers, not wrap in new Date().
  */
 export function buildDateRangeFilter(from?: string, to?: string): Filter<Document> {
   if (!from && !to) return {};
   const filter: Record<string, unknown> = {};
-  if (from) filter['$gte'] = new Date(from);
-  if (to) filter['$lte'] = new Date(to);
+  if (from) filter['$gte'] = parseInt(from, 10);
+  if (to) filter['$lte'] = parseInt(to, 10);
   return { '_local.timestamp': filter };
 }
 
@@ -55,11 +57,12 @@ export function buildStateFilter(
 /**
  * Paginate a MongoDB collection query.
  */
+// LOW-7 fix: removed non-spec `pages` field — spec response is { total, page, limit, data }
 export async function paginatedFind<T extends Document>(
   collection: Collection<T>,
   filter: Filter<T>,
   options: FindOptions<T> & { page?: number; limit?: number }
-): Promise<{ data: T[]; total: number; page: number; limit: number; pages: number }> {
+): Promise<{ data: T[]; total: number; page: number; limit: number }> {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(100, Math.max(1, options.limit ?? 25));
   const skip = (page - 1) * limit;
@@ -71,13 +74,7 @@ export async function paginatedFind<T extends Document>(
     collection.countDocuments(filter),
   ]);
 
-  return {
-    data,
-    total,
-    page,
-    limit,
-    pages: Math.ceil(total / limit),
-  };
+  return { data, total, page, limit };
 }
 
 /**

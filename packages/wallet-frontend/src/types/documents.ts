@@ -8,13 +8,15 @@ export interface SmDocument {
     timestamp: number;
   };
   _chain: {
-    roles: Record<string, { paramId: string; name: string }>;
+    roles: Record<string, string>; // plain paramId strings, e.g. { "Consignee": "0x..." }
     _sys: {
       plantIDs?: Record<string, string[]>;
       restrictedTo?: Array<{ userId: string; role: string; team: string }>;
     };
   };
   _participants?: Record<string, { C_Organization?: string; C_InternalID?: string }>;
+  smId?: string;
+  smName?: string;
   access?: 'RW' | 'RO';
   [key: string]: unknown;
 }
@@ -30,6 +32,9 @@ export interface DocumentAction {
 }
 
 export interface ActionsResponse {
+  currentState: string;
+  currentSubState: string | null;
+  currentMicroState: string | null;
   availableActions: DocumentAction[];
   alternateNextActions: DocumentAction[];
   linkedSmActions: DocumentAction[];
@@ -45,9 +50,18 @@ export interface TxnHistory {
   changeType: string;
 }
 
-export interface DiffResponse {
-  orderedItems: unknown[];
-  diff: Record<string, { parent: number; children: number; balance: number }>;
+export interface DiffBlock {
+  hasOrderedItems: boolean;
+  parentQty: number | null;
+  consumedQty: number | null;
+  remainingQty: number | null;
+  canCreateChild: boolean;
+  items: unknown[];
+  children: unknown[];
+}
+
+export interface DiffResponse extends SmDocument {
+  diff: DiffBlock;
 }
 
 export interface DocumentListParams {
@@ -56,12 +70,14 @@ export interface DocumentListParams {
   search?: string;
   page?: number;
   limit?: number;
+  smId?: string;
+  include_actions?: boolean;
+  include_diff?: boolean;
 }
 
 export interface DocumentListResponse {
-  items: SmDocument[];
+  documents: SmDocument[];
   total: number;
   page: number;
   limit: number;
-  totalPages: number;
 }

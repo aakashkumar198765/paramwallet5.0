@@ -70,13 +70,13 @@ export async function authMiddleware(
     return reply.status(401).send({ error: 'Invalid token' });
   }
 
-  // Validate session in param_auth.{paramId}
+  // Validate session in param_auth.sessions
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const sessionId = `session:${tokenHash}`;
 
   try {
     const authDb = getDb(resolveAuthDb());
-    const sessionCol = authDb.collection(paramId);
+    const sessionCol = authDb.collection('sessions');
     const session = await sessionCol.findOne({ _id: sessionId as unknown as string });
 
     if (!session) {

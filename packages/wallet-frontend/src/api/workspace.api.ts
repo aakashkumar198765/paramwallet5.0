@@ -15,7 +15,7 @@ export async function getWorkspace(): Promise<Workspace> {
 export async function createWorkspace(data: {
   subdomain: string;
   workspaceName: string;
-  exchangeParamId: string;
+  ownerOrgName?: string;
 }): Promise<Workspace> {
   const res = await apiClient.post<Workspace>('/workspace/create', data);
   return res.data;

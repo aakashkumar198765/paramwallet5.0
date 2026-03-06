@@ -8,15 +8,34 @@ export interface AuthState {
 }
 
 export interface OtpRequestResponse {
-  success: boolean;
+  status: string; // 'sent'
 }
 
 export interface OtpVerifyResponse {
   token: string;
   refreshToken: string;
-  paramId: string;
-  userId: string;
-  email: string;
+  expiresAt: number;
+  isTermsAndConditionVerified: boolean;
+  user: {
+    userId: string;
+    email: string;
+  };
+  enn: {
+    paramId: string;
+    pennId: string;
+    publicKey: string;
+  };
+}
+
+export interface RefreshResponse {
+  token: string;
+  refreshToken: string;
+  expiresAt: number;
+  user: {
+    userId: string;
+    email: string;
+    paramId: string;
+  };
 }
 
 export interface Profile {

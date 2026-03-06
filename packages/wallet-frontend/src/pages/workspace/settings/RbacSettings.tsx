@@ -9,8 +9,8 @@ export default function RbacSettings() {
 
   const { data: matrices, isLoading } = useQuery({
     queryKey: ['teamRbacMatrix', workspace, superAppId],
-    queryFn: () => listRbacMatrices(workspace!, superAppId!),
-    enabled: !!workspace && !!superAppId,
+    queryFn: () => listRbacMatrices(superAppId!),
+    enabled: !!superAppId,
   });
 
   if (isLoading) return <LoadingSpinner />;

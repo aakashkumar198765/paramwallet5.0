@@ -1,17 +1,17 @@
-import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listOrgs } from '@/api/org.api';
+import { useSuperAppStore } from '@/store/superapp.store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 export default function Orgs() {
-  const { workspace } = useParams<{ workspace: string }>();
+  const { activeSuperApp } = useSuperAppStore();
 
   const { data: orgs, isLoading } = useQuery({
-    queryKey: ['organizations', workspace],
-    queryFn: () => listOrgs(workspace!),
-    enabled: !!workspace,
+    queryKey: ['organizations', activeSuperApp],
+    queryFn: () => listOrgs(activeSuperApp!),
+    enabled: !!activeSuperApp,
   });
 
   if (isLoading) return <LoadingSpinner />;

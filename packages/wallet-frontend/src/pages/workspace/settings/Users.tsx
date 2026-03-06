@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getUsersByRole } from '@/api/user.api';
+import { listUsersByRole } from '@/api/user.api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -41,8 +41,8 @@ function RoleUsers({ superAppId, roleName }: { superAppId: string; roleName: str
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users', workspace, superAppId, roleName],
-    queryFn: () => getUsersByRole(workspace!, superAppId, roleName),
-    enabled: !!workspace && !!superAppId,
+    queryFn: () => listUsersByRole(superAppId, roleName),
+    enabled: !!superAppId,
   });
 
   if (isLoading) return <LoadingSpinner />;

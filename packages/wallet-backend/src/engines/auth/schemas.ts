@@ -7,7 +7,9 @@ export const OtpRequestSchema = z.object({
 
 export const OtpVerifySchema = z.object({
   email: z.string().email(),
-  otp: z.string().min(4).max(8),
+  // MED-1 fix: ENN OTPs are typically 6 digits; .length(8) would reject standard 6-digit OTPs.
+  // Use min/max range to accommodate both 6-digit and 8-char variants.
+  otp: z.string().min(4).max(8).regex(/^[a-zA-Z0-9]+$/, 'OTP must be alphanumeric'),
   deviceId: z.string().optional(),
 });
 

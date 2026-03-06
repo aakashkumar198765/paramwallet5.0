@@ -1,49 +1,47 @@
 import apiClient from './client';
 import type { AppUser } from '@/types/workspace';
 
-export async function listUsers(subdomain: string, superAppId: string): Promise<AppUser[]> {
-  const res = await apiClient.get<AppUser[]>(`/workspaces/${subdomain}/superapps/${superAppId}/users`);
+// Uses X-Workspace header for all calls
+
+export async function listUsersByRole(superAppId: string, role: string): Promise<AppUser[]> {
+  const res = await apiClient.get<AppUser[]>(`/superapp/${superAppId}/roles/${role}/users`);
   return res.data;
 }
 
-export async function getUser(subdomain: string, superAppId: string, userId: string): Promise<AppUser> {
-  const res = await apiClient.get<AppUser>(`/workspaces/${subdomain}/superapps/${superAppId}/users/${userId}`);
-  return res.data;
-}
-
-export async function inviteUser(
-  subdomain: string,
+export async function createUsers(
   superAppId: string,
-  data: { email: string; roleId: string; teamIds: string[] }
-): Promise<AppUser> {
-  const res = await apiClient.post<AppUser>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/users/invite`,
+  role: string,
+  data: {
+    users: Array<{
+      email: string;
+      name: string;
+      teams: string[];
+      plants: string[];
+      partnerId?: string;
+    }>;
+  }
+): Promise<AppUser[]> {
+  const res = await apiClient.post<AppUser[]>(
+    `/superapp/${superAppId}/roles/${role}/users`,
     data
   );
+  return res.data;
+}
+
+export async function getUser(superAppId: string, userId: string): Promise<AppUser> {
+  const res = await apiClient.get<AppUser>(`/superapp/${superAppId}/users/${userId}`);
   return res.data;
 }
 
 export async function updateUser(
-  subdomain: string,
   superAppId: string,
   userId: string,
   data: Partial<AppUser>
 ): Promise<AppUser> {
-  const res = await apiClient.put<AppUser>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/users/${userId}`,
-    data
-  );
+  const res = await apiClient.put<AppUser>(`/superapp/${superAppId}/users/${userId}`, data);
   return res.data;
 }
 
-export async function removeUser(subdomain: string, superAppId: string, userId: string): Promise<void> {
-  await apiClient.delete(`/workspaces/${subdomain}/superapps/${superAppId}/users/${userId}`);
-}
-
-export async function getUsersByRole(subdomain: string, superAppId: string, roleId: string): Promise<AppUser[]> {
-  const res = await apiClient.get<AppUser[]>(
-    `/workspaces/${subdomain}/superapps/${superAppId}/users`,
-    { params: { roleId } }
-  );
-  return res.data;
+export async function removeUser(superAppId: string, userId: string): Promise<void> {
+  await apiClient.delete(`/superapp/${superAppId}/users/${userId}`);
 }

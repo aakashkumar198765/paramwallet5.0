@@ -16,7 +16,7 @@ import DemoRolePicker from '@/pages/demo/DemoRolePicker';
 export default function SuperAppList() {
   const { subdomain } = useParams<{ subdomain: string }>();
   const navigate = useNavigate();
-  const { data: superapps = [], isLoading } = useInstalledSuperApps(subdomain!);
+  const { data: superapps = [], isLoading } = useInstalledSuperApps();
   const [selected, setSelected] = useState<InstalledSuperApp | null>(null);
   const [demoPickerOpen, setDemoPickerOpen] = useState(false);
   const { isDemoMode } = useDemoStore();
@@ -106,7 +106,7 @@ export default function SuperAppList() {
             <div>
               <p className="text-xs text-muted-foreground">Roles</p>
               <div className="mt-1 flex flex-wrap gap-1">
-                {selected.roles.map((r) => (
+                {(selected.roles ?? []).map((r) => (
                   <Badge key={r.name} variant="outline" className="text-xs">
                     {r.name}
                   </Badge>
@@ -145,7 +145,7 @@ export default function SuperAppList() {
         <DemoRolePicker
           open={demoPickerOpen}
           onClose={() => setDemoPickerOpen(false)}
-          roles={selected.roles.map((r) => r.name)}
+          roles={(selected.roles ?? []).map((r) => r.name)}
         />
       )}
     </div>

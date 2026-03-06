@@ -48,7 +48,7 @@ interface LeftNavProps {
 export function LeftNav({ mode }: LeftNavProps) {
   const { subdomain, superAppId } = useParams<{ subdomain?: string; superAppId?: string }>();
   const { activeSuperAppData } = useSuperAppStore();
-  const { data: superapps = [] } = useInstalledSuperApps(subdomain ?? '');
+  const { data: superapps = [] } = useInstalledSuperApps();
 
   if (mode === 'definitions') {
     return (

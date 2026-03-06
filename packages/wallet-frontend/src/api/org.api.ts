@@ -1,29 +1,43 @@
 import apiClient from './client';
 import type { Organization } from '@/types/workspace';
 
-export async function listOrgs(subdomain: string): Promise<Organization[]> {
-  const res = await apiClient.get<Organization[]>(`/workspaces/${subdomain}/orgs`);
+// Uses X-Workspace and X-SuperApp-ID headers for all calls
+
+export async function getOrgProfile(superAppId: string): Promise<Organization> {
+  const res = await apiClient.get<Organization>(`/superapp/${superAppId}/org/profile`);
   return res.data;
 }
 
-export async function getOrg(subdomain: string, orgId: string): Promise<Organization> {
-  const res = await apiClient.get<Organization>(`/workspaces/${subdomain}/orgs/${orgId}`);
+export async function listOrgs(superAppId: string): Promise<Organization[]> {
+  const res = await apiClient.get<Organization[]>(`/superapp/${superAppId}/orgs`);
   return res.data;
 }
 
-export async function createOrg(
-  subdomain: string,
-  data: Omit<Organization, '_id' | 'createdAt'>
+export async function listOrgsByRole(superAppId: string, role: string): Promise<Organization[]> {
+  const res = await apiClient.get<Organization[]>(`/superapp/${superAppId}/orgs/${role}`);
+  return res.data;
+}
+
+export async function onboardPartner(
+  superAppId: string,
+  data: { partnerParamId: string; role: string; orgName: string; vendorId?: string }
 ): Promise<Organization> {
-  const res = await apiClient.post<Organization>(`/workspaces/${subdomain}/orgs`, data);
+  const res = await apiClient.post<Organization>(
+    `/superapp/${superAppId}/partners/onboard`,
+    data
+  );
   return res.data;
 }
 
-export async function updateOrg(
-  subdomain: string,
-  orgId: string,
-  data: Partial<Organization>
+export async function updateOrgStatus(
+  superAppId: string,
+  role: string,
+  paramId: string,
+  status: string
 ): Promise<Organization> {
-  const res = await apiClient.put<Organization>(`/workspaces/${subdomain}/orgs/${orgId}`, data);
+  const res = await apiClient.put<Organization>(
+    `/superapp/${superAppId}/orgs/${role}/${paramId}/status`,
+    { status }
+  );
   return res.data;
 }

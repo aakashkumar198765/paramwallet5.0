@@ -24,16 +24,14 @@ async function doRefresh(): Promise<string> {
     const res = await axios.post<{
       token: string;
       refreshToken: string;
-      paramId: string;
-      userId: string;
-      email: string;
+      user: { userId: string; email: string; paramId: string };
     }>(`${BASE_URL}/auth/refresh`, { refreshToken });
     setAuth({
       token: res.data.token,
       refreshToken: res.data.refreshToken,
-      paramId: res.data.paramId,
-      userId: res.data.userId,
-      email: res.data.email,
+      paramId: res.data.user.paramId,
+      userId: res.data.user.userId,
+      email: res.data.user.email,
     });
     return res.data.token;
   } catch {
@@ -49,10 +47,13 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const { activeWorkspace } = useWorkspaceStore.getState();
   const { activeSuperApp } = useSuperAppStore.getState();
 
+  const { activePortal } = useSuperAppStore.getState();
+
   if (token) config.headers['Authorization'] = `Bearer ${token}`;
   if (paramId) config.headers['X-Param-ID'] = paramId;
   if (activeWorkspace) config.headers['X-Workspace'] = activeWorkspace;
   if (activeSuperApp) config.headers['X-SuperApp-ID'] = activeSuperApp;
+  if (activePortal) config.headers['X-Portal'] = activePortal;
 
   return config;
 });

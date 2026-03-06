@@ -51,14 +51,15 @@ export interface Organization {
 
 export interface AppUser {
   _id: string;
-  paramId: string;
+  userId: string;
+  paramId?: string;
   email: string;
   name: string;
-  roleId: string;
-  roleName: string;
-  teamIds: string[];
-  isActive: boolean;
-  createdAt: number;
+  role: string; // portal name e.g. "Consignee", "Shipper"
+  teams: string[];
+  plants: string[];
+  status: string;
+  addedAt: number;
 }
 
 export interface PlatformContext {
